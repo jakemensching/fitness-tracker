@@ -312,7 +312,7 @@ const BUILTIN = [
   ["db-bench", "DB Bench Press", "Chest"], ["dips", "Dips", "Chest", 1], ["cable-fly", "Cable Fly", "Chest"], ["low-high-fly", "Low-to-High Cable Fly", "Upper Chest"],
   ["ohp", "Overhead Press", "Shoulders"], ["db-ohp", "DB Shoulder Press", "Shoulders"], ["lateral", "Lateral Raise", "Shoulders"], ["rear-delt", "Rear Delt Fly", "Shoulders"],
   ["row", "Barbell Row", "Back"], ["cable-row", "Seated Cable Row", "Back"], ["db-row", "DB Row", "Back"], ["tbar", "T-Bar Row", "Back"],
-  ["pullup", "Pull-Ups", "Lats", 1], ["chinup", "Chin-Ups", "Lats", 1], ["pulldown", "Lat Pulldown", "Lats"], ["pullover", "Cable Pullover", "Lats"],
+  ["pullup", "Pull-Ups", "Lats", 1], ["chinup", "Chin-Ups", "Lats", 1], ["pulldown", "Lat Pulldown", "Lats"], ["sa-pulldown", "Single Arm Lat Pulldown", "Lats"], ["pullover", "Cable Pullover", "Lats"],
   ["curl", "Barbell Curl", "Biceps"], ["db-curl", "DB Curl", "Biceps"], ["incline-curl", "Incline DB Curl", "Biceps"], ["preacher", "Preacher Curl", "Biceps"], ["hammer", "Hammer Curl", "Biceps"],
   ["pushdown", "Tricep Pushdown", "Triceps"], ["skull", "Skull Crushers", "Triceps"], ["oh-ext", "Overhead Tricep Extension", "Triceps"],
   ["squat", "Squat", "Quads"], ["front-squat", "Front Squat", "Quads"], ["leg-press", "Leg Press", "Quads"], ["hack", "Hack Squat", "Quads"],
@@ -321,7 +321,7 @@ const BUILTIN = [
   ["hip-thrust", "Hip Thrust", "Glutes"], ["calf", "Calf Raise", "Calves"], ["decline-crunch", "Decline Weighted Crunch", "Core"], ["leg-raise", "Hanging Leg Raise", "Core", 1], ["cable-crunch", "Cable Crunch", "Core"]
 ].map(([id, name, group, bw, region]) => ({ id, name, group, bw: !!bw, region: region || null }));
 // Retired lifts stay defined so old sessions keep their names, but leave the picker unless already in your history.
-const RETIRED = new Set(["curl"]);
+const RETIRED = new Set(["curl", "skull", "deadlift"]);
 const BIG4 = [["bench", "Bench"], ["squat", "Squat"], ["deadlift", "Deadlift"], ["ohp", "OHP"]];
 
 /* ---------- Utils ---------- */
@@ -856,7 +856,8 @@ function renderStats() {
     <div class="tile"><span class="lbl">Since start</span><div class="big-num">${signed(b.sinceStart)}</div></div>
     <div class="tile"><span class="lbl">Last 4 wks</span><div class="big-num">${b.four == null ? "–" : signed(b.four)}</div></div></div>`;
   const best = id => { const l = idx.byEx[id] || []; let e = null, w = null; l.forEach(s => { if (!e || s.e1 > e.e1) e = s; if (!w || s.maxW > w.maxW) w = s; }); return { e, w }; };
-  html += `<div class="card"><div class="row between"><h3>Relative strength</h3><span class="small muted">Best e1RM ÷ ${bw ? r1(bw) + " lbs" : "body weight"}</span></div><div class="grid2">${BIG4.map(([id, l]) => {
+  const big4 = BIG4.filter(([id]) => !RETIRED.has(id) || idx.byEx[id]);
+  html += `<div class="card"><div class="row between"><h3>Relative strength</h3><span class="small muted">Best e1RM ÷ ${bw ? r1(bw) + " lbs" : "body weight"}</span></div><div class="${big4.length === 3 ? "grid3" : "grid2"}">${big4.map(([id, l]) => {
     const B = best(id).e;
     const v = B && bw ? (B.e1 / bw) : null;
     return `<div class="tile" style="background:var(--raised)"><span class="lbl">${l}</span><div class="big-num">${v ? v.toFixed(2) + '<span class="unit">× BW</span>' : "–"}</div><span class="small muted">${B ? "e1RM " + r0(B.e1) : "Not logged yet"}${B && !bw ? " · log body weight" : ""}</span></div>`;

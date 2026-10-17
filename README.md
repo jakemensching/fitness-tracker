@@ -4,7 +4,7 @@ A personal, mobile-first workout tracker built around progressive overload and b
 
 ## Features
 
-- **Logging**: sessions with exercises and sets (weight in lbs, reps, optional RPE). 40 preloaded lifts plus custom exercises, each tagged with a muscle group.
+- **Logging**: sessions with exercises and sets (weight in lbs, reps, optional RPE). 38 preloaded lifts plus custom exercises, each tagged with a muscle group.
 - **Beat this**: picking an exercise shows last session's sets and the next target. There are also "Copy last session" and "Fill target" buttons.
 - **PR badge** shows the moment a set beats your previous best weight or e1RM.
 - **Body weight** logging with a 7-day moving average.
