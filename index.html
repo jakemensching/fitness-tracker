@@ -304,9 +304,9 @@ textarea.inp { min-height: 160px; font-size: 13px; text-align: left; font-family
 "use strict";
 
 /* ---------- Exercise library ---------- */
-const GROUPS = ["Chest", "Upper Chest", "Shoulders", "Back", "Biceps", "Triceps", "Quads", "Hamstrings", "Glutes", "Calves", "Core"];
-const LOWER = new Set(["Quads", "Hamstrings", "Glutes", "Calves"]);
-const WEAK = new Set(["Upper Chest", "Quads", "Hamstrings", "Glutes", "Calves"]); // 3 sets to failure by default
+const GROUPS = ["Chest", "Upper Chest", "Shoulders", "Back", "Biceps", "Triceps", "Quads", "Hamstrings", "Adductors", "Abductors", "Calves", "Core"];
+const LOWER = new Set(["Quads", "Hamstrings", "Glutes", "Adductors", "Abductors", "Calves"]);
+const WEAK = new Set(["Upper Chest", "Quads", "Hamstrings", "Glutes", "Adductors", "Abductors", "Calves"]); // 3 sets to failure by default
 const LAT_FOCUS = new Set(["pullup", "chinup", "pulldown", "sa-pulldown", "pullover"]); // Back, but lats are a weak spot: 3 sets
 const BUILTIN = [
   ["bench", "Bench Press", "Chest"], ["incline", "Incline Bench Press", "Upper Chest"], ["incline-db", "Incline DB Press", "Upper Chest"],
@@ -319,10 +319,10 @@ const BUILTIN = [
   ["squat", "Squat", "Quads"], ["front-squat", "Front Squat", "Quads"], ["leg-press", "Leg Press", "Quads"], ["hack", "Hack Squat", "Quads"],
   ["leg-ext", "Leg Extension", "Quads"], ["bss", "Bulgarian Split Squat", "Quads"],
   ["deadlift", "Deadlift", "Back", 0, "lower"], ["rdl", "Romanian Deadlift (RDL)", "Hamstrings"], ["sldl", "Straight Leg Deadlift", "Hamstrings"], ["leg-curl", "Leg Curl", "Hamstrings"],
-  ["hip-thrust", "Hip Thrust", "Glutes"], ["calf", "Calf Raise", "Calves"], ["decline-crunch", "Decline Weighted Crunch", "Core"], ["leg-raise", "Hanging Leg Raise", "Core", 1], ["cable-crunch", "Cable Crunch", "Core"]
+  ["hip-thrust", "Hip Thrust", "Glutes"], ["adduction", "Hip Adduction", "Adductors"], ["abduction", "Hip Abduction", "Abductors"], ["calf", "Calf Raise", "Calves"], ["decline-crunch", "Decline Weighted Crunch", "Core"], ["leg-raise", "Hanging Leg Raise", "Core", 1], ["cable-crunch", "Cable Crunch", "Core"]
 ].map(([id, name, group, bw, region]) => ({ id, name, group, bw: !!bw, region: region || null }));
 // Retired lifts stay defined so old sessions keep their names, but leave the picker unless already in your history.
-const RETIRED = new Set(["curl", "skull", "deadlift", "front-squat"]);
+const RETIRED = new Set(["curl", "skull", "deadlift", "front-squat", "hip-thrust"]);
 const BIG4 = [["bench", "Bench"], ["squat", "Squat"], ["deadlift", "Deadlift"], ["ohp", "OHP"]];
 
 /* ---------- Utils ---------- */
@@ -777,7 +777,7 @@ function drawProgress() {
     const lw = Math.max(isFinite(lo) ? weekStart(lo) : first, first);
     const fullWeeks = Math.max(1, Math.round((cur - lw) / 7));
     const groups = GROUPS.slice();
-    allEx().forEach(e => { const g = getEx(e.id).group; if (!groups.includes(g)) groups.push(g); });
+    allEx().forEach(e => { if (RETIRED.has(e.id) && !idx.byEx[e.id]) return; const g = getEx(e.id).group; if (!groups.includes(g)) groups.push(g); });
     const thisW = Object.fromEntries(groups.map(g => [g, 0])), tot = Object.fromEntries(groups.map(g => [g, 0]));
     idx.active.forEach(w => {
       const n = dn(w.date), wk = weekStart(n);
