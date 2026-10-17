@@ -3,6 +3,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Overload Lift Log</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="%230E1115"/><rect x="6" y="29" width="52" height="6" rx="2" fill="%235E6874"/><rect x="13" y="12" width="10" height="40" rx="3" fill="%23F4C21B"/><rect x="27" y="17" width="9" height="30" rx="3" fill="%23FF5D4F"/><rect x="40" y="21" width="8" height="22" rx="3" fill="%235B8CFF"/></svg>'>
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAADqUlEQVR4nO3dMW4kRRiA0TZCDr1yYII9CmcALRkhByHmIBuhzdZiz7CXIHdAtgHJSsgkOHHCTHfVuPvze/FMdY306VdJ0zN9dXN797hAxDcvvQEYSdCkCJoUQZMiaFIETYqgSRE0KYImRdCkCJoUQZMiaFIETYqgSRE0KYImRdCkCJoUQZMiaFIETYqgSRE0KYImRdCkCJoUQZMiaFIETYqgSRE0KYIm5duX3sA5Hu6vN6/x9t3XATthr66O8EiKESE/J+ym3R85ZsQ8c11e1q6Dnh2dqHt2G/SlYhN1y26DhjV2GfSlp6Yp3bHLoGEtQZMiaFIETYqgSRE0KYIm5VB32+3Zlx++X/W+N58+D97J6ybojdaG/Pz9wh7DkWODrTHPWus1E/RKMwIU9XaCXmFmeKLeRtCkCPpMl5igpvR6giZF0KQImhRBk+Kbwqgff/3rrNf/8dt3k3ZyWYKOOTfk5+87etiOHCFrYx69xksSdMTIEI8ctaADZgR41KgFTYqgD27mJD3ilBY0KYImRdCkCJoUQZMiaFIETYqgSRE0KYImRdCkCJoUQZMiaFIETYqgSZnyq++ffv5l4wq/D9nHOU7e899/zt3If07dzz872cdaHz+8H7re0KBnf3h6npoZFfawI4eY2WJUP87QpAwJ2nRmhBEdmdCkCJoUQZMiaFIETYqgSRE0KYImZUjQo28w4XUa0ZEJzS7s7uYkU5q1RrYzdEJ//PBe2JxldC9XN7d3j0NXHODh/vri13z77utJr7vUg+XffPp80utm/8v+0R7z5gxNiqBJETQpgiZF0KQImhRBkyJoUgRNiqBJETQpgiZF0KQImhRBkyJoUgR9cDNvwD/azf3LImhiBB0wY5IecTovi6AzRgZ41JiXRdApI0I8cszLMumxbrycpyDP/TX40UN+IuioSqDncuQgRdCkCJoUQZMi6DOd+p9ze79GlaBJEfQKMyeo6byNoFeaEZ6YtxP0BiMDFPMYvinc6CnEtX+ELuSxBD2IMPfBkYMUQZMiaFIETYqgSRE0KYImZZdBn/pU16Nej3l2GTSstdugLzU1TeeW3Qa9LPNjE3PProNelnnRibnp6ub27vGlN3Gqh/vrzWsIue1QQcP/2f2RA84haFIETYqgSRE0KYImRdCkCJoUQZMiaFIETYqgSRE0KYImRdCkCJoUQZMiaFIETYqgSRE0KYImRdCkCJoUQZMiaFIETYqgSRE0KYImRdCkCJqUfwHmwp3E9USmawAAAABJRU5ErkJggg==">
+<meta name="theme-color" content="#0E1115">
+<meta name="apple-mobile-web-app-title" content="Overload">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
@@ -252,6 +256,7 @@ textarea.inp { min-height: 160px; font-size: 13px; text-align: left; font-family
     var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (fade && !reduce) { root.classList.add("fading"); clearTimeout(fadeT); fadeT = setTimeout(function () { root.classList.remove("fading"); }, 2500); }
     root.classList.toggle("sun", light);
+    var tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.setAttribute("content", light ? "#EDF0F4" : "#0E1115");
     clearTimeout(apply.t); apply.t = setTimeout(function () { window.dispatchEvent(new Event("overload:theme")); }, fade && !reduce ? 2450 : 0);
   }
   function tick(fade) {
