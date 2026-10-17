@@ -175,7 +175,7 @@ input[type="date"].inp { font-size: 17px; text-align: left; }
 
 /* Charts */
 .chartbox { position: relative; height: 240px; width: 100%; }
-.chartbox.tall { height: 380px; }
+.chartbox.tall { height: 440px; }
 .empty { border: 1px dashed var(--line); border-radius: var(--r); padding: 22px 16px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .empty h3 { color: var(--fg); }
 
@@ -305,6 +305,16 @@ textarea.inp { min-height: 160px; font-size: 13px; text-align: left; font-family
 
 /* ---------- Exercise library ---------- */
 const GROUPS = ["Chest", "Upper Chest", "Shoulders", "Back", "Biceps", "Triceps", "Quads", "Hamstrings", "Adductors", "Abductors", "Calves", "Core"];
+// Categories with subcategories. An exercise is tagged with its subcategory (e.g. Quads); it rolls up to its category (Legs).
+const SUBS = { Legs: ["Quads", "Hamstrings", "Adductors", "Abductors", "Calves"] };
+const PARENT = { Glutes: "Legs" };
+Object.entries(SUBS).forEach(([c, l]) => l.forEach(g => { PARENT[g] = c; }));
+const catOf = g => PARENT[g] || g;
+const TOP = GROUPS.map(catOf).filter((c, i, a) => a.indexOf(c) === i);
+const groupLabel = g => PARENT[g] ? PARENT[g] + " · " + g : g;
+const groupOptions = sel => TOP.map(c => SUBS[c]
+  ? `<optgroup label="${c}">${SUBS[c].map(g => `<option value="${g}" ${g === sel ? "selected" : ""}>${g}</option>`).join("")}</optgroup>`
+  : `<option value="${c}" ${c === sel ? "selected" : ""}>${c}</option>`).join("");
 const LOWER = new Set(["Quads", "Hamstrings", "Glutes", "Adductors", "Abductors", "Calves"]);
 const WEAK = new Set(["Upper Chest", "Quads", "Hamstrings", "Glutes", "Adductors", "Abductors", "Calves"]); // 3 sets to failure by default
 const LAT_FOCUS = new Set(["pullup", "chinup", "pulldown", "sa-pulldown", "pullover"]); // Back, but lats are a weak spot: 3 sets
@@ -651,7 +661,7 @@ function exBlock(w, e, ei) {
       <button class="btn sm" data-act="open-settings" data-focus="${esc(e.exId)}">Rep range</button>
       <button class="btn sm danger" data-act="rm-ex" data-ei="${ei}">Remove</button></div>` : "";
   return `<section class="exb" id="ex-${ei}">
-    <header><div><h3>${esc(ex.name)}</h3><div class="row" style="gap:6px"><span class="tag">${esc(ex.group)}</span><span class="tag">${ex.sets}×${ex.min}–${ex.max} to failure</span>${ex.bw ? '<span class="tag">BW + added</span>' : ""}</div></div>
+    <header><div><h3>${esc(ex.name)}</h3><div class="row" style="gap:6px"><span class="tag">${esc(groupLabel(ex.group))}</span><span class="tag">${ex.sets}×${ex.min}–${ex.max} to failure</span>${ex.bw ? '<span class="tag">BW + added</span>' : ""}</div></div>
     <button class="iconbtn" data-act="ex-menu" data-ei="${ei}" aria-label="Exercise options" aria-expanded="${ui.openMenu === ei}"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></header>
     ${menu}${beat}
     <div class="setgrid"><span class="hd">Set</span><span class="hd">${unit}</span><span class="hd">Reps</span><span class="hd">RPE</span><span></span>${rows}</div>
@@ -730,7 +740,7 @@ function renderProgress() {
       <span class="small muted">Sum of weight × reps across all sets.</span></div>
     <div class="card"><div class="row between"><h3>Weekly sets by muscle</h3><span class="small muted">Sun–Sat weeks</span></div>
       <div class="chartbox tall"><canvas id="c-mg"></canvas></div>
-      <span class="small muted">Yellow is this week so far. Blue is your average per full week in the range. Short bars are muscles you're neglecting.</span></div>`;
+      <span class="small muted">Yellow is this week so far. Blue is your average per full week in the range. Legs shows the total, with each subcategory under it. Short bars are muscles you're neglecting.</span></div>`;
 }
 function baseOpts(extra) {
   const fg = css("--muted"), grid = css("--line");
@@ -776,24 +786,31 @@ function drawProgress() {
     const first = idx.active.length ? weekStart(dn(idx.active[0].date)) : cur;
     const lw = Math.max(isFinite(lo) ? weekStart(lo) : first, first);
     const fullWeeks = Math.max(1, Math.round((cur - lw) / 7));
-    const groups = GROUPS.slice();
-    allEx().forEach(e => { if (RETIRED.has(e.id) && !idx.byEx[e.id]) return; const g = getEx(e.id).group; if (!groups.includes(g)) groups.push(g); });
-    const thisW = Object.fromEntries(groups.map(g => [g, 0])), tot = Object.fromEntries(groups.map(g => [g, 0]));
+    const thisW = {}, tot = {}, cats = TOP.slice();
+    allEx().forEach(e => { if (RETIRED.has(e.id) && !idx.byEx[e.id]) return; const c = catOf(getEx(e.id).group); if (!cats.includes(c)) cats.push(c); });
+    const rows = [];
+    cats.forEach(c => {
+      if (SUBS[c]) {
+        rows.push({ label: c, keys: Object.keys(PARENT).filter(g => PARENT[g] === c), sub: false });
+        SUBS[c].forEach(g => rows.push({ label: "↳ " + g, keys: [g], sub: true }));
+      } else rows.push({ label: c, keys: [c], sub: false });
+    });
     idx.active.forEach(w => {
       const n = dn(w.date), wk = weekStart(n);
       w.exercises.forEach(e => {
         const ex2 = getEx(e.exId), c = (e.sets || []).filter(s => validSet(s, ex2)).length;
-        if (wk === cur) thisW[ex2.group] += c;
-        else if (wk >= lw && wk < cur) tot[ex2.group] += c;
+        if (wk === cur) thisW[ex2.group] = (thisW[ex2.group] || 0) + c;
+        else if (wk >= lw && wk < cur) tot[ex2.group] = (tot[ex2.group] || 0) + c;
       });
     });
     const o = baseOpts({ indexAxis: "y" });
     o.plugins.legend = { display: true, position: "top", align: "start", labels: { color: css("--muted"), boxWidth: 12, boxHeight: 12, useBorderRadius: true, borderRadius: 3 } };
     o.scales.x.beginAtZero = true; o.scales.x.ticks.precision = 0;
-    o.scales.y.grid.display = false; o.scales.y.ticks.maxTicksLimit = 20; o.scales.y.ticks.color = css("--fg");
-    charts.push(new Chart($("#c-mg"), { type: "bar", data: { labels: groups, datasets: [
-      { label: "This week", data: groups.map(g => thisW[g]), backgroundColor: acc, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 },
-      { label: cur > lw ? "Avg per week" : "Avg (no full weeks yet)", data: groups.map(g => Math.round(tot[g] / fullWeeks * 10) / 10), backgroundColor: blue, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 }
+    o.scales.y.grid.display = false; o.scales.y.ticks.maxTicksLimit = 30; o.scales.y.ticks.autoSkip = false; const fgc = css("--fg"), mc = css("--muted"); o.scales.y.ticks.color = c => rows[c.index] && rows[c.index].sub ? mc : fgc;
+    const sum = (bag, r) => r.keys.reduce((a, k) => a + (bag[k] || 0), 0);
+    charts.push(new Chart($("#c-mg"), { type: "bar", data: { labels: rows.map(r => r.label), datasets: [
+      { label: "This week", data: rows.map(r => sum(thisW, r)), backgroundColor: acc, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 },
+      { label: cur > lw ? "Avg per week" : "Avg (no full weeks yet)", data: rows.map(r => Math.round(sum(tot, r) / fullWeeks * 10) / 10), backgroundColor: blue, borderRadius: 3, barPercentage: 0.85, categoryPercentage: 0.75 }
     ] }, options: o }));
   }
 }
@@ -885,10 +902,10 @@ const picker = { q: "", g: "All" };
 function openSheet(html) { $("#sheet").innerHTML = `<div class="scrim" data-act="close-scrim"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`; }
 function closeSheet() { $("#sheet").innerHTML = ""; }
 function openPicker() {
-  picker.q = ""; picker.g = "All";
+  picker.q = ""; picker.g = "All"; picker.sub = "All";
   openSheet(`<div class="sh-head"><div class="row between"><h3>Add exercise</h3><button class="btn sm ghost" data-act="close-sheet">Close</button></div>
     <input class="inp left" id="pk-q" placeholder="Search exercises" autocomplete="off" aria-label="Search exercises">
-    <div class="chips scroll" id="pk-g">${["All"].concat(GROUPS).map(g => `<button class="chip" data-act="pk-g" data-g="${esc(g)}" aria-pressed="${g === "All"}">${esc(g)}</button>`).join("")}</div></div>
+    <div class="chips scroll" id="pk-g">${["All"].concat(TOP).map(g => `<button class="chip" data-act="pk-g" data-g="${esc(g)}" aria-pressed="${g === "All"}">${esc(g)}</button>`).join("")}</div></div>
     <div class="sh-body" id="pk-list"></div>`);
   pickerList();
 }
@@ -897,21 +914,22 @@ function pickerList() {
   const recent = [];
   idx.ws.slice().reverse().forEach(w => w.exercises.forEach(e => { if (!recent.includes(e.exId)) recent.push(e.exId); }));
   const inW = new Set((S.workouts[ui.editing] && S.workouts[ui.editing].exercises || []).map(e => e.exId));
-  let list = allEx().map(e => getEx(e.id)).filter(e => (!RETIRED.has(e.id) || idx.byEx[e.id]) && (picker.g === "All" || e.group === picker.g) && (!q || e.name.toLowerCase().includes(q)));
+  let list = allEx().map(e => getEx(e.id)).filter(e => (!RETIRED.has(e.id) || idx.byEx[e.id]) && (picker.g === "All" || catOf(e.group) === picker.g) && (picker.sub === "All" || e.group === picker.sub) && (!q || e.name.toLowerCase().includes(q)));
   list.sort((a, b) => {
     const ra = recent.indexOf(a.id), rb = recent.indexOf(b.id);
     if ((ra >= 0) !== (rb >= 0)) return ra >= 0 ? -1 : 1;
     if (ra >= 0) return ra - rb;
     return GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || a.name.localeCompare(b.name);
   });
+  const subChips = SUBS[picker.g] ? `<div class="chips scroll">${["All"].concat(SUBS[picker.g]).map(g => `<button class="chip" data-act="pk-sub" data-g="${esc(g)}" aria-pressed="${g === picker.sub}">${g === "All" ? "All " + esc(picker.g.toLowerCase()) : esc(g)}</button>`).join("")}</div>` : "";
   const row = e => {
     const l = idx.byEx[e.id], last = l && l[l.length - 1];
-    return `<button class="pick" data-act="pick-ex" data-id="${esc(e.id)}"><div class="grow"><div class="name">${esc(e.name)}</div><span class="small muted">${esc(e.group)}${last ? " · last " + esc(setsTxt(last.sets.slice(0, 2), e)) : ""}</span></div>${inW.has(e.id) ? '<span class="tag">In session</span>' : ""}</button>`;
+    return `<button class="pick" data-act="pick-ex" data-id="${esc(e.id)}"><div class="grow"><div class="name">${esc(e.name)}</div><span class="small muted">${esc(groupLabel(e.group))}${last ? " · last " + esc(setsTxt(last.sets.slice(0, 2), e)) : ""}</span></div>${inW.has(e.id) ? '<span class="tag">In session</span>' : ""}</button>`;
   };
-  $("#pk-list").innerHTML = `<div>${list.map(row).join("") || '<div class="muted small" style="padding:12px 0">No match. Create it below.</div>'}</div>
+  $("#pk-list").innerHTML = `${subChips}<div>${list.map(row).join("") || '<div class="muted small" style="padding:12px 0">No match. Create it below.</div>'}</div>
     <form class="card" data-form="custom" style="background:var(--raised)"><span class="lbl">Custom exercise</span>
       <input class="inp left" id="cx-name" placeholder="e.g. Machine Chest Press" value="${esc(picker.q)}" autocomplete="off" aria-label="Custom exercise name">
-      <div class="row" style="flex-wrap:nowrap"><select class="inp left" id="cx-group" aria-label="Muscle group">${GROUPS.map(g => `<option ${g === (picker.g === "All" ? "Chest" : picker.g) ? "selected" : ""}>${g}</option>`).join("")}</select>
+      <div class="row" style="flex-wrap:nowrap"><select class="inp left" id="cx-group" aria-label="Muscle group">${groupOptions(picker.sub !== "All" ? picker.sub : picker.g === "All" ? "Chest" : (SUBS[picker.g] ? SUBS[picker.g][0] : picker.g))}</select>
       <button class="btn primary" type="submit" style="flex:none">Create & add</button></div></form>`;
 }
 function openSettings(focusId) {
@@ -928,7 +946,7 @@ function openSettings(focusId) {
     <div><span class="lbl">Rep ranges and muscle groups</span><p class="small muted" style="margin:4px 0 0">Sets are your default count to failure. Hitting the max reps on every set triggers a weight jump.</p>
       <div class="exset" style="border:0;padding-bottom:0"><span class="hd lbl">Group</span><span class="lbl" style="text-align:center">Sets</span><span class="lbl" style="text-align:center">Min</span><span class="lbl" style="text-align:center">Max</span></div>
       ${exs.map(e => `<div class="exset" id="set-${esc(e.id)}"><div class="nm"><span>${esc(e.name)}</span>${e.custom ? `<button class="btn sm danger" data-act="custom-del" data-id="${esc(e.id)}">Delete</button>` : ""}</div>
-        <select class="inp gsel" data-set="group" data-id="${esc(e.id)}" aria-label="${esc(e.name)} muscle group">${GROUPS.map(g => `<option ${g === e.group ? "selected" : ""}>${g}</option>`).join("")}</select>
+        <select class="inp gsel" data-set="group" data-id="${esc(e.id)}" aria-label="${esc(e.name)} muscle group">${groupOptions(e.group)}</select>
         <input class="inp" data-set="sets" data-id="${esc(e.id)}" inputmode="numeric" value="${e.sets}" aria-label="${esc(e.name)} sets">
         <input class="inp" data-set="min" data-id="${esc(e.id)}" inputmode="numeric" value="${e.min}" aria-label="${esc(e.name)} min reps">
         <input class="inp" data-set="max" data-id="${esc(e.id)}" inputmode="numeric" value="${e.max}" aria-label="${esc(e.name)} max reps"></div>`).join("")}
@@ -1093,7 +1111,8 @@ document.addEventListener("click", ev => {
     }
     case "add-ex": openPicker(); return;
     case "pick-ex": addExercise(b.dataset.id); return;
-    case "pk-g": picker.g = b.dataset.g; document.querySelectorAll("#pk-g .chip").forEach(c => c.setAttribute("aria-pressed", c === b)); pickerList(); return;
+    case "pk-g": picker.g = b.dataset.g; picker.sub = "All"; document.querySelectorAll("#pk-g .chip").forEach(c => c.setAttribute("aria-pressed", c === b)); pickerList(); return;
+    case "pk-sub": picker.sub = b.dataset.g; pickerList(); return;
     case "ex-menu": ui.openMenu = ui.openMenu === ei ? null : ei; render(); return;
     case "ex-move": { const d = +b.dataset.d, j = ei + d; if (!w || j < 0 || j >= w.exercises.length) return; const x = w.exercises.splice(ei, 1)[0]; w.exercises.splice(j, 0, x); ui.openMenu = j; saveWorkout(w.id, true); render(); return; }
     case "rm-ex": if (!armed(b, "Tap to remove")) return; w.exercises.splice(ei, 1); ui.openMenu = null; saveWorkout(w.id, true); render(); return;
