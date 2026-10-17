@@ -30,6 +30,10 @@ A personal, mobile-first workout tracker built around progressive overload and b
 | Body | Weigh-ins as dots with a 7-day average line, change since start and over 4 weeks |
 | Stats | Workouts this week, streak, PRs with dates, next targets, relative strength |
 
+## Day and night theme
+
+The palette is light from first light to last light (civil twilight, sun 6° below the horizon) and dark the rest of the day, with a 2.4s color fade at each switch. The default location is Champaign, IL. Des Plaines or custom coordinates can be set in the settings menu. The sun/moon button in the header previews the fade. A preview holds until the next real switch.
+
 ## Data and sync
 
 - When opened as a Claude artifact, data is stored in your private per-account store and syncs across devices. A local copy plus a pending-changes queue means logging works offline and syncs later.
