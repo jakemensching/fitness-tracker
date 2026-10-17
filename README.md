@@ -17,7 +17,7 @@ A personal, mobile-first workout tracker built around progressive overload and b
 - Bodyweight lifts (pull-ups, chin-ups, dips, hanging leg raise) count body weight plus added weight. Body weight is the 7-day average on that date.
 - Relative strength is best e1RM ÷ current 7-day body weight average.
 - Next-session target uses double progression. The default rep range is 6–10, editable per exercise. If every set hits the top of the range, add weight (+5 lbs upper body, +10 lbs lower body). Otherwise, beat your best set by one rep at the same weight.
-- Default sets per exercise is 2 to failure, or 3 for upper chest, lats and legs.
+- Default sets per exercise is 2 to failure, or 3 for upper chest, legs and lat-focused back lifts (pull-ups, chin-ups, pulldowns, pullovers).
 - Weeks run Sunday to Saturday. The weekly streak counts consecutive weeks with 4+ sessions.
 
 ### Screens

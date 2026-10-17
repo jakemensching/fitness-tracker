@@ -304,15 +304,16 @@ textarea.inp { min-height: 160px; font-size: 13px; text-align: left; font-family
 "use strict";
 
 /* ---------- Exercise library ---------- */
-const GROUPS = ["Chest", "Upper Chest", "Shoulders", "Back", "Lats", "Biceps", "Triceps", "Quads", "Hamstrings", "Glutes", "Calves", "Core"];
+const GROUPS = ["Chest", "Upper Chest", "Shoulders", "Back", "Biceps", "Triceps", "Quads", "Hamstrings", "Glutes", "Calves", "Core"];
 const LOWER = new Set(["Quads", "Hamstrings", "Glutes", "Calves"]);
-const WEAK = new Set(["Upper Chest", "Lats", "Quads", "Hamstrings", "Glutes", "Calves"]); // 3 sets to failure by default
+const WEAK = new Set(["Upper Chest", "Quads", "Hamstrings", "Glutes", "Calves"]); // 3 sets to failure by default
+const LAT_FOCUS = new Set(["pullup", "chinup", "pulldown", "sa-pulldown", "pullover"]); // Back, but lats are a weak spot: 3 sets
 const BUILTIN = [
   ["bench", "Bench Press", "Chest"], ["incline", "Incline Bench Press", "Upper Chest"], ["incline-db", "Incline DB Press", "Upper Chest"],
   ["db-bench", "DB Bench Press", "Chest"], ["dips", "Dips", "Chest", 1], ["cable-fly", "Cable Fly", "Chest"], ["low-high-fly", "Low-to-High Cable Fly", "Upper Chest"],
   ["ohp", "Overhead Press", "Shoulders"], ["db-ohp", "DB Shoulder Press", "Shoulders"], ["lateral", "Lateral Raise", "Shoulders"], ["rear-delt", "Rear Delt Fly", "Shoulders"],
   ["row", "Barbell Row", "Back"], ["cable-row", "Seated Cable Row", "Back"], ["db-row", "DB Row", "Back"], ["tbar", "T-Bar Row", "Back"],
-  ["pullup", "Pull-Ups", "Lats", 1], ["chinup", "Chin-Ups", "Lats", 1], ["pulldown", "Lat Pulldown", "Lats"], ["sa-pulldown", "Single Arm Lat Pulldown", "Lats"], ["pullover", "Cable Pullover", "Lats"],
+  ["pullup", "Pull-Ups", "Back", 1], ["chinup", "Chin-Ups", "Back", 1], ["pulldown", "Lat Pulldown", "Back"], ["sa-pulldown", "Single Arm Lat Pulldown", "Back"], ["pullover", "Cable Pullover", "Back"],
   ["curl", "Barbell Curl", "Biceps"], ["db-curl", "DB Curl", "Biceps"], ["incline-curl", "Incline DB Curl", "Biceps"], ["preacher", "Preacher Curl", "Biceps"], ["hammer", "Hammer Curl", "Biceps"],
   ["pushdown", "Tricep Pushdown", "Triceps"], ["skull", "Skull Crushers", "Triceps"], ["oh-ext", "Overhead Tricep Extension", "Triceps"],
   ["squat", "Squat", "Quads"], ["front-squat", "Front Squat", "Quads"], ["leg-press", "Leg Press", "Quads"], ["hack", "Hack Squat", "Quads"],
@@ -469,12 +470,13 @@ function allEx() { return BUILTIN.concat((S.meta.custom || []).map(c => Object.a
 function getEx(id) {
   const b = BUILTIN.find(x => x.id === id) || (S.meta.custom || []).find(x => x.id === id) || { id, name: id, group: "Core" };
   const o = (S.meta.ex || {})[id] || {};
-  const group = o.group || b.group;
+  let group = o.group || b.group;
+  if (group === "Lats") group = "Back"; // older entries
   return {
     id, name: b.name, group, bw: !!b.bw, custom: !BUILTIN.some(x => x.id === id),
     region: b.region || (LOWER.has(group) ? "lower" : "upper"),
     min: o.min != null ? o.min : 6, max: o.max != null ? o.max : 10,
-    sets: o.sets != null ? o.sets : (WEAK.has(group) ? 3 : 2)
+    sets: o.sets != null ? o.sets : (WEAK.has(group) || LAT_FOCUS.has(id) ? 3 : 2)
   };
 }
 const validSet = (s, ex) => s && s.r > 0 && (s.w != null || ex.bw);
