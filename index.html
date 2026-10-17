@@ -1,6 +1,29 @@
 <!doctype html>
+<html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+/* Base styles the Claude artifact viewer normally provides, so the standalone build renders the same. */
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font-size: 14px; font-family: system-ui, -apple-system, sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+button, input, select, label { touch-action: manipulation; }
+/* Installed app: the status bar text is always white, so keep the strip behind it dark. */
+@media (display-mode: standalone) {
+  html { overscroll-behavior-y: none; }
+  body::before { background: #0E1115 !important; }
+}
+</style>
+<script>
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+}
+</script>
 <title>Overload Lift Log</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="%230E1115"/><rect x="6" y="29" width="52" height="6" rx="2" fill="%235E6874"/><rect x="13" y="12" width="10" height="40" rx="3" fill="%23F4C21B"/><rect x="27" y="17" width="9" height="30" rx="3" fill="%23FF5D4F"/><rect x="40" y="21" width="8" height="22" rx="3" fill="%235B8CFF"/></svg>'>
@@ -203,10 +226,18 @@ textarea.inp { min-height: 160px; font-size: 13px; text-align: left; font-family
 .banner { background: var(--accent-fill); color: var(--accent-ink); border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; font-weight: 600; }
 .banner .btn { min-height: 38px; background: var(--accent-ink); color: var(--accent-fill); border: 0; }
 #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + env(safe-area-inset-bottom, 0px)); z-index: 60; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 15px; max-width: calc(100% - 32px); box-shadow: 0 6px 24px rgb(0 0 0 / .35); }
-@media (max-width: 400px) {
+header.top .col > * { flex-shrink: 0; }
+header.top .spacer { flex-shrink: 1; min-width: 0; }
+@media (max-width: 430px) {
   header.top .col { gap: 6px; }
-  header.top .iconbtn { width: 40px; height: 40px; }
-  .mark { font-size: 21px; }
+  header.top .iconbtn { width: 38px; height: 38px; border-radius: 10px; }
+  header.top .iconbtn svg { width: 18px; height: 18px; }
+  .mark { font-size: 20px; gap: 6px; }
+  .mark i { width: 8px; height: 18px; box-shadow: 10px 0 0 var(--pr), 20px 0 0 var(--blue); margin-right: 20px; }
+  .pill { font-size: 11px; padding: 4px 8px; }
+}
+@media (max-width: 360px) {
+  .pill { font-size: 0; gap: 0; padding: 0; width: 22px; height: 22px; justify-content: center; }
 }
 @media (max-width: 380px) {
   .setgrid { grid-template-columns: 32px minmax(0,1.3fr) minmax(0,1fr) minmax(0,.8fr) 34px; gap: 6px; }
@@ -441,10 +472,10 @@ function syncPill() {
   const el = $("#sync");
   let t = "Synced", c = "ok";
   if (DEMO) { t = "Sample"; c = "busy"; }
-  else if (!DB) { t = "This device"; c = ""; }
-  else if (offline) { t = pending.length ? "Offline · saved here" : "Offline"; c = "warn"; }
+  else if (!DB) { t = "Local"; c = ""; }
+  else if (offline) { t = "Offline"; c = "warn"; }
   else if (pending.length) { t = "Saving"; c = "busy"; }
-  el.textContent = t; el.className = "pill " + c;
+  el.textContent = t; el.className = "pill " + c; el.title = "Sync: " + t;
 }
 
 async function initCloud() {
@@ -919,7 +950,7 @@ function pickerList() {
   const recent = [];
   idx.ws.slice().reverse().forEach(w => w.exercises.forEach(e => { if (!recent.includes(e.exId)) recent.push(e.exId); }));
   const inW = new Set((S.workouts[ui.editing] && S.workouts[ui.editing].exercises || []).map(e => e.exId));
-  let list = allEx().map(e => getEx(e.id)).filter(e => (!RETIRED.has(e.id) || idx.byEx[e.id]) && (picker.g === "All" || catOf(e.group) === picker.g) && (picker.sub === "All" || e.group === picker.sub) && (!q || e.name.toLowerCase().includes(q)));
+  let list = allEx().map(e => getEx(e.id)).filter(e => (!RETIRED.has(e.id) || idx.byEx[e.id]) && (q ? e.name.toLowerCase().includes(q) : (picker.g === "All" || catOf(e.group) === picker.g) && (picker.sub === "All" || e.group === picker.sub)));
   list.sort((a, b) => {
     const ra = recent.indexOf(a.id), rb = recent.indexOf(b.id);
     if ((ra >= 0) !== (rb >= 0)) return ra >= 0 ? -1 : 1;

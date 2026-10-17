@@ -51,6 +51,28 @@ To add your own sync backend, replace `writeOp`, `flush` and `initCloud` in `ind
 { custom: [{ id, name, group }], ex: { [exId]: { group, sets, min, max } } }
 ```
 
+## Install on your phone
+
+The GitHub Pages build is an installable web app. It opens full screen with no browser bar and works offline.
+
+- **iPhone:** open the Pages link in Safari, tap Share, then Add to Home Screen.
+- **Android:** open it in Chrome and tap Install app (or find it in the ⋮ menu).
+
+On iPhone, the installed app has its own storage, separate from Safari. Data only matches across devices once a sync backend is connected.
+
+## Files
+
+| File | Purpose |
+| --- | --- |
+| `src/app.html` | App source (same file that runs as the Claude artifact) |
+| `head.html` | Pages-only head: manifest link, iOS app tags, base styles, service worker registration |
+| `index.html` | Built output, `head.html` + `src/app.html`. Run `./build.sh` after editing either |
+| `manifest.json` | App name, icons, standalone display, colors |
+| `sw.js` | Service worker: offline app shell, network-first page loads so updates arrive on next open |
+| `icons/`, `favicon.svg`, `apple-touch-icon.png` | Plate stack icons |
+
+When you ship a change, bump `VERSION` in `sw.js` so installed copies drop the old cache.
+
 ## Running it
 
-Open `index.html` in a browser, or enable GitHub Pages on `main`. Charts load Chart.js 4.4.1 from cdnjs. Fonts are Barlow and Barlow Condensed from Google Fonts.
+Open `index.html` in a browser, or serve the folder (`python3 -m http.server`) to test the service worker on localhost. GitHub Pages serves it from `main`. Charts load Chart.js 4.4.1 from cdnjs. Fonts are Barlow and Barlow Condensed from Google Fonts.
