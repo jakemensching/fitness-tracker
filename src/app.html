@@ -472,7 +472,7 @@ async function supaClient() {
   return SB;
 }
 function supaAdapter(sb, userId) {
-  const T = "entries";
+  const T = "overload_entries";
   const listeners = [];
   const err = e => { const x = new Error(e.message || "sync failed"); x.code = e.status === 413 ? "quota_exceeded" : undefined; return x; };
   const rows = async prefix => {

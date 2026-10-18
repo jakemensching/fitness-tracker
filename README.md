@@ -43,7 +43,7 @@ The palette is light from first light to last light (civil twilight, sun 6° bel
 ### Supabase setup
 
 1. Create a project at supabase.com.
-2. SQL Editor: run `supabase/schema.sql` (one `entries` table with row level security, added to realtime).
+2. SQL Editor: run `supabase/schema.sql` (one `overload_entries` table with row level security, added to realtime).
 3. Authentication > Users > Add user: your email and a password, with Auto Confirm on.
 4. Authentication > Sign In / Providers: turn off "Allow new users to sign up" so nobody else can make an account.
 5. Project Settings > API: copy the Project URL and the anon public key into `head.html`, run `./build.sh`, push.
