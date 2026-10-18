@@ -10,6 +10,9 @@ create table if not exists public.overload_entries (
 
 alter table public.overload_entries enable row level security;
 
+-- Signed-in users need table access; the policy below still limits them to their own rows.
+grant select, insert, update, delete on public.overload_entries to authenticated;
+
 -- Each account can only see and change its own rows.
 drop policy if exists "own rows" on public.overload_entries;
 create policy "own rows" on public.overload_entries
@@ -18,4 +21,7 @@ create policy "own rows" on public.overload_entries
   with check (auth.uid() = user_id);
 
 -- Live updates between phone and laptop.
-alter publication supabase_realtime add table public.overload_entries;
+do $$ begin
+  alter publication supabase_realtime add table public.overload_entries;
+exception when duplicate_object then null;
+end $$;
