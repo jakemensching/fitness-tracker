@@ -20,8 +20,6 @@ button, input, select, label { touch-action: manipulation; }
   /* iOS can stop fixed elements short of the screen bottom. Paint the tab bar's
      color below it so there's no darker strip around the home indicator. */
   nav.tabs::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 160px; background: inherit; }
-  /* When that gap exists it already clears the home indicator, so drop the extra padding. */
-  html.vgap nav.tabs { padding-bottom: 0 !important; }
 }
 </style>
 <script>
@@ -30,10 +28,13 @@ button, input, select, label { touch-action: manipulation; }
    security in supabase/schema.sql keeps each account's rows private. */
 window.OVERLOAD_SUPABASE = { url: "https://mdehemxrtatlsxpinozb.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kZWhlbXhydGF0bHN4cGlub3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNzEyNzgsImV4cCI6MjEwNDg0NzI3OH0.Z1dxhKzaotbNVbMKFvSPM3B1JvMRY15l7ogMgSG_6Lg" };
 (function () {
+  /* iOS home screen apps leave a strip under fixed bars when a page is too short to scroll.
+     Keeping every page just taller than the screen makes iOS use the full height. */
   var standalone = window.navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
   if (!standalone) return;
-  function fit() { var gap = (screen.height || 0) - window.innerHeight; document.documentElement.classList.toggle("vgap", gap > 20 && gap < 120); }
-  fit(); window.addEventListener("resize", fit); window.addEventListener("orientationchange", function () { setTimeout(fit, 300); });
+  function fit() { if (document.body) document.body.style.minHeight = (Math.max(screen.height || 0, window.innerHeight) + 1) + "px"; }
+  document.addEventListener("DOMContentLoaded", fit);
+  window.addEventListener("orientationchange", function () { setTimeout(fit, 300); });
 })();
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });

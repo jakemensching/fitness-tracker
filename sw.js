@@ -1,5 +1,5 @@
 // Overload service worker: app shell works offline, updates arrive on the next open.
-const VERSION = "overload-v3";
+const VERSION = "overload-v4";
 const SHELL = ["./", "./index.html", "./manifest.json", "./favicon.svg", "./apple-touch-icon.png", "./icons/icon-192.png", "./icons/icon-512.png"];
 const CDN = ["cdnjs.cloudflare.com", "cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
 
@@ -21,7 +21,7 @@ self.addEventListener("fetch", e => {
 
   // The page itself: network first so new versions show up, cached copy when offline.
   if (req.mode === "navigate") {
-    e.respondWith(fetch(req)
+    e.respondWith(fetch(req, { cache: "no-store" })
       .then(res => { const copy = res.clone(); caches.open(VERSION).then(c => c.put("./index.html", copy)); return res; })
       .catch(() => caches.match("./index.html")));
     return;
