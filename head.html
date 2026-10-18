@@ -20,6 +20,10 @@ button, input, select, label { touch-action: manipulation; }
 }
 </style>
 <script>
+/* Supabase sync. Paste your project's URL and anon (public) key from
+   Supabase > Project Settings > API. The anon key is safe to publish: row level
+   security in supabase/schema.sql keeps each account's rows private. */
+window.OVERLOAD_SUPABASE = { url: "", key: "" };
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
 }

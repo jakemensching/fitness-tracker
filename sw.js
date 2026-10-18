@@ -1,7 +1,7 @@
 // Overload service worker: app shell works offline, updates arrive on the next open.
-const VERSION = "overload-v1";
+const VERSION = "overload-v2";
 const SHELL = ["./", "./index.html", "./manifest.json", "./favicon.svg", "./apple-touch-icon.png", "./icons/icon-192.png", "./icons/icon-512.png"];
-const CDN = ["cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com"];
+const CDN = ["cdnjs.cloudflare.com", "cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

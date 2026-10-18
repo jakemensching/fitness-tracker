@@ -452,8 +452,113 @@ function syncPill() {
   el.textContent = t; el.className = "pill " + c; el.title = "Sync: " + t;
 }
 
+
+/* ---------- Supabase sync (GitHub Pages build) ----------
+   Mimics the doc/collection/onSnapshot shape of the Claude store so flush() and
+   the snapshot handlers work unchanged. One table, one row per key:
+   "meta", "w:<workout id>", "b:<YYYY-MM-DD>". */
+const SUPA_CFG = window.OVERLOAD_SUPABASE && window.OVERLOAD_SUPABASE.url && window.OVERLOAD_SUPABASE.key ? window.OVERLOAD_SUPABASE : null;
+const SUPA_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
+let SB = null, SB_USER = null;
+function loadScript(src) {
+  return new Promise((res, rej) => { const el = document.createElement("script"); el.src = src; el.onload = res; el.onerror = rej; document.head.appendChild(el); });
+}
+async function supaClient() {
+  if (SB) return SB;
+  if (!SUPA_CFG) return null;
+  if (!window.supabase || !window.supabase.createClient) { try { await loadScript(SUPA_JS); } catch (e) { return null; } }
+  if (!window.supabase || !window.supabase.createClient) return null;
+  SB = window.supabase.createClient(SUPA_CFG.url, SUPA_CFG.key, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "overload.auth.v1" } });
+  return SB;
+}
+function supaAdapter(sb, userId) {
+  const T = "entries";
+  const listeners = [];
+  const err = e => { const x = new Error(e.message || "sync failed"); x.code = e.status === 413 ? "quota_exceeded" : undefined; return x; };
+  const rows = async prefix => {
+    let q = sb.from(T).select("k,data").eq("user_id", userId);
+    q = prefix === "meta" ? q.eq("k", "meta") : q.like("k", prefix + ":%");
+    const { data, error } = await q;
+    if (error) throw error;
+    return data || [];
+  };
+  const ref = k => ({
+    async set(data) { const { error } = await sb.from(T).upsert({ user_id: userId, k, data, updated_at: new Date().toISOString() }); if (error) throw err(error); },
+    async delete() { const { error } = await sb.from(T).delete().eq("user_id", userId).eq("k", k); if (error) throw err(error); }
+  });
+  const watch = (prefix, emit, onErr) => {
+    const run = async () => { try { emit(await rows(prefix)); offline = false; syncPill(); } catch (e) { onErr && onErr(e); } };
+    listeners.push(run); run();
+  };
+  let t = null;
+  const refresh = () => { clearTimeout(t); t = setTimeout(() => listeners.forEach(f => f()), 250); };
+  sb.channel("overload-" + userId)
+    .on("postgres_changes", { event: "*", schema: "public", table: T, filter: "user_id=eq." + userId }, refresh)
+    .subscribe();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  window.addEventListener("online", refresh);
+  const coll = name => {
+    const pre = name === "workouts" ? "w" : "b";
+    return {
+      doc: id => ref(pre + ":" + id),
+      onSnapshot(cb, onErr) { watch(pre, r => cb({ docs: r.map(x => ({ id: x.k.slice(2), data: () => x.data })) }), onErr); }
+    };
+  };
+  return {
+    rows,
+    doc: () => ({
+      set: d => ref("meta").set(d), delete: () => ref("meta").delete(),
+      collection: coll,
+      onSnapshot(cb, onErr) { watch("meta", r => cb({ exists: !!r[0], data: () => r[0] && r[0].data }), onErr); }
+    })
+  };
+}
+/* First sign-in on a device: push anything logged here that the cloud doesn't have yet. */
+async function supaBootstrap(adapter, userId) {
+  const flag = "overload.boot." + userId;
+  if (store.get(flag, false)) return;
+  const [m, ws, bs] = await Promise.all([adapter.rows("meta"), adapter.rows("w"), adapter.rows("b")]);
+  const have = new Set(ws.concat(bs).map(r => r.k));
+  const queued = new Set(pending.map(p => p.k));
+  Object.values(S.workouts).forEach(w => { const k = "w:" + w.id; if (!have.has(k) && !queued.has(k)) pending.push({ k, op: "set", data: clone(w) }); });
+  Object.values(S.bw).forEach(b => { const k = "b:" + b.date; if (!have.has(k) && !queued.has(k)) pending.push({ k, op: "set", data: clone(b) }); });
+  // Meta: merge so an empty phone never wipes your rep ranges and custom lifts.
+  const remote = normMeta(m[0] && m[0].data), local = normMeta(S.meta);
+  const merged = { custom: remote.custom.slice(), ex: Object.assign({}, remote.ex, local.ex) };
+  local.custom.forEach(c => { if (!merged.custom.some(x => x.id === c.id)) merged.custom.push(c); });
+  pending = pending.filter(p => p.k !== "meta");
+  if (merged.custom.length || Object.keys(merged.ex).length) pending.push({ k: "meta", op: "set", data: merged });
+  S.meta = merged;
+  store.set(K.pending, pending); saveCache();
+  store.set(flag, true);
+}
+async function initSupabase() {
+  const sb = await supaClient(); if (!sb) return false;
+  let session = null;
+  try { session = (await sb.auth.getSession()).data.session; } catch (e) {}
+  if (!session) { SB_USER = null; return false; }
+  SB_USER = session.user;
+  const adapter = supaAdapter(sb, SB_USER.id);
+  try { await supaBootstrap(adapter, SB_USER.id); } catch (e) { offline = true; } // retried on next open
+  DB = adapter; BASE = "supabase";
+  return true;
+}
+async function supaSignIn(email, password) {
+  const sb = await supaClient(); if (!sb) throw new Error("Couldn't reach Supabase. Check your connection.");
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+}
+async function supaSignOut() {
+  if (pending.length && !confirm("Some changes haven't synced yet. Sign out anyway? They stay on this device.")) return false;
+  try { await SB.auth.signOut(); } catch (e) {}
+  location.reload();
+  return true;
+}
+
 async function initCloud() {
   syncPill();
+  if (SUPA_CFG && !window.claude) { await initSupabase(); }
+  if (DB) { attachSnapshots(); return; }
   if (!window.claude || !window.claude.use) { await new Promise(r => setTimeout(r, 1500)); }
   if (!window.claude || !window.claude.use) { syncPill(); return; }
   let db, user;
@@ -462,6 +567,9 @@ async function initCloud() {
   let id = null; try { id = await user.id(); } catch (e) {}
   if (!id) { syncPill(); return; }
   DB = db; BASE = "data/users/" + id + "/meta";
+  attachSnapshots();
+}
+function attachSnapshots() {
   const m = DB.doc(BASE);
   const onErr = () => { offline = true; syncPill(); };
   m.onSnapshot(snap => {
@@ -945,10 +1053,19 @@ function pickerList() {
 function openSettings(focusId) {
   const exs = allEx().map(e => getEx(e.id)).filter(e => !RETIRED.has(e.id) || index().byEx[e.id]).sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || a.name.localeCompare(b.name));
   const syncTxt = DEMO ? "Sample mode is on, so nothing is being saved."
+    : SB_USER ? "Your log syncs to your Supabase account across your phone and computer. A copy also stays on this device, so logging works with bad gym signal and syncs when you're back online."
     : DB ? "Your log is saved to your Claude account and syncs across devices. Open this page signed in on your phone and computer and you'll see the same data. A copy also stays on this device, so logging works with bad gym signal and syncs when you're back online."
+    : SUPA_CFG ? "Sign in below to sync with your phone and computer. Until then your log is saved on this device only."
     : "Sync isn't available in this view, so your log is saved in this browser only. Use Export and Import to move it between devices and keep backups.";
+  const acct = !SUPA_CFG || (DB && !SB_USER) ? ""
+    : SB_USER ? `<div class="card" style="background:var(--raised)"><span class="lbl">Account</span><span class="small">Signed in as <b>${esc(SB_USER.email || "")}</b></span><div class="row"><button class="btn sm" data-act="sb-out">Sign out</button></div></div>`
+    : `<form class="card" data-form="sb-in" style="background:var(--raised)"><span class="lbl">Sign in to sync</span>
+        <input class="inp left" id="sb-email" type="email" autocomplete="username" placeholder="Email" aria-label="Email" required>
+        <input class="inp left" id="sb-pass" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password" required>
+        <button class="btn primary" type="submit">Sign in</button><div id="sb-msg" class="small"></div></form>`;
   openSheet(`<div class="sh-head"><div class="row between"><h3>Data & exercises</h3><button class="btn sm ghost" data-act="close-sheet">Close</button></div></div>
   <div class="sh-body">
+    ${acct}
     <div class="card" style="background:var(--raised)"><span class="lbl">Storage</span><span class="small">${syncTxt}</span>
       <div class="row"><button class="btn sm" data-act="export-json">Export JSON</button><button class="btn sm" data-act="export-csv">Sets CSV</button><button class="btn sm" data-act="export-bw">Body weight CSV</button></div>
       <label class="btn sm" style="align-self:flex-start">Import JSON backup<input type="file" id="imp" accept=".json,application/json" hidden></label>
@@ -1146,6 +1263,7 @@ document.addEventListener("click", ev => {
     case "bw-cancel": ui.bwEdit = null; render(); return;
     case "bw-del": if (!armed(b, "Tap to delete")) return; delete S.bw[b.dataset.date]; writeOp("b:" + b.dataset.date, "del"); touch(); render(); return;
     case "open-settings": openSettings(b.dataset.focus); return;
+    case "sb-out": supaSignOut(); return;
     case "theme-preview": window.OverloadSky.preview(); return;
     case "custom-del": {
       if (!armed(b, "Tap to delete")) return;
@@ -1220,6 +1338,13 @@ document.addEventListener("submit", ev => {
     S.bw[d] = { date: d, w: Math.round(wv * 10) / 10 }; writeOp("b:" + d, "set", S.bw[d]);
     ui.bwEdit = null; touch(); render(); toast("Weigh-in saved: " + fmtW(S.bw[d].w) + " lbs");
     if (document.activeElement) document.activeElement.blur();
+  }
+  if (f === "sb-in") {
+    const email = $("#sb-email").value.trim(), pass = $("#sb-pass").value, msg = $("#sb-msg"), btn = ev.target.querySelector("button");
+    btn.disabled = true; msg.textContent = "Signing in…";
+    supaSignIn(email, pass).then(() => { toast("Signed in. Syncing your log…"); location.reload(); })
+      .catch(e => { btn.disabled = false; msg.style.color = "var(--pr)"; msg.textContent = /invalid/i.test(e.message || "") ? "Wrong email or password." : (e.message || "Couldn't sign in."); });
+    return;
   }
   if (f === "custom") {
     const name = $("#cx-name").value.trim(), group = $("#cx-group").value;

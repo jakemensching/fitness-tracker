@@ -37,7 +37,17 @@ The palette is light from first light to last light (civil twilight, sun 6° bel
 ## Data and sync
 
 - When opened as a Claude artifact, data is stored in your private per-account store and syncs across devices. A local copy plus a pending-changes queue means logging works offline and syncs later.
-- Opened anywhere else (local file, GitHub Pages), the cloud layer is absent. The app falls back to `localStorage` on that device only.
+- On GitHub Pages, data syncs through Supabase once `window.OVERLOAD_SUPABASE` in `head.html` has your project URL and anon key and you sign in from the gear menu. Same local copy and offline queue, plus live updates between devices.
+- With no Supabase config (or opened as a local file), the app falls back to `localStorage` on that device only.
+
+### Supabase setup
+
+1. Create a project at supabase.com.
+2. SQL Editor: run `supabase/schema.sql` (one `entries` table with row level security, added to realtime).
+3. Authentication > Users > Add user: your email and a password, with Auto Confirm on.
+4. Authentication > Sign In / Providers: turn off "Allow new users to sign up" so nobody else can make an account.
+5. Project Settings > API: copy the Project URL and the anon public key into `head.html`, run `./build.sh`, push.
+6. Open the Pages site, tap the gear, sign in. Anything already logged on that device uploads on first sign-in.
 - The settings menu (gear icon) has Export JSON, Sets CSV, Body weight CSV and Import JSON (merge) for backups and moving data.
 
 To add your own sync backend, replace `writeOp`, `flush` and `initCloud` in `index.html`. The data shapes stay the same:
@@ -68,6 +78,7 @@ On iPhone, the installed app has its own storage, separate from Safari. Data onl
 | `head.html` | Pages-only head: manifest link, iOS app tags, base styles, service worker registration |
 | `index.html` | Built output, `head.html` + `src/app.html`. Run `./build.sh` after editing either |
 | `manifest.json` | App name, icons, standalone display, colors |
+| `supabase/schema.sql` | Table and row level security for Supabase sync |
 | `sw.js` | Service worker: offline app shell, network-first page loads so updates arrive on next open |
 | `icons/`, `favicon.svg`, `apple-touch-icon.png` | Plate stack icons |
 
@@ -75,4 +86,4 @@ When you ship a change, bump `VERSION` in `sw.js` so installed copies drop the o
 
 ## Running it
 
-Open `index.html` in a browser, or serve the folder (`python3 -m http.server`) to test the service worker on localhost. GitHub Pages serves it from `main`. Charts load Chart.js 4.4.1 from cdnjs. Fonts are Barlow and Barlow Condensed from Google Fonts.
+Open `index.html` in a browser, or serve the folder (`python3 -m http.server`) to test the service worker on localhost. GitHub Pages serves it from `main`. Charts load Chart.js 4.4.1 from cdnjs. Supabase sync loads supabase-js 2.45.4 from jsDelivr, only when configured. Fonts are Barlow and Barlow Condensed from Google Fonts.
