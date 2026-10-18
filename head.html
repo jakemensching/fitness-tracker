@@ -23,7 +23,7 @@ button, input, select, label { touch-action: manipulation; }
 /* Supabase sync. Paste your project's URL and anon (public) key from
    Supabase > Project Settings > API. The anon key is safe to publish: row level
    security in supabase/schema.sql keeps each account's rows private. */
-window.OVERLOAD_SUPABASE = { url: "", key: "" };
+window.OVERLOAD_SUPABASE = { url: "https://mdehemxrtatlsxpinozb.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kZWhlbXhydGF0bHN4cGlub3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNzEyNzgsImV4cCI6MjEwNDg0NzI3OH0.Z1dxhKzaotbNVbMKFvSPM3B1JvMRY15l7ogMgSG_6Lg" };
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
 }
