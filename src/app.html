@@ -170,6 +170,22 @@ body.resting main .col { padding-bottom: calc(170px + env(safe-area-inset-bottom
 @media (max-width: 359px) { #rest .rl { display: none; } }
 #rest.done .rb { border-color: var(--accent); }
 #rest.done .rt { color: var(--accent); }
+.daygrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.daybtn { text-align: left; background: var(--raised); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 4px; color: var(--fg); }
+.daybtn b { font-family: var(--display); font-size: 22px; letter-spacing: .03em; text-transform: uppercase; }
+.daybtn span { font-size: 13px; color: var(--muted); line-height: 1.25; }
+.stlist { display: flex; flex-direction: column; gap: 0; }
+.stlist div { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.stlist div:last-child { border-bottom: 0; }
+.stlist i { font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; }
+.strun { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 8px 0 4px; }
+.strun .clock { font-family: var(--display); font-weight: 700; font-size: 84px; line-height: 1; font-variant-numeric: tabular-nums; }
+.strun .clock.paused { color: var(--muted); }
+.strun h2 { margin: 0; font-family: var(--display); font-size: 30px; letter-spacing: .02em; text-transform: uppercase; }
+.strun p { margin: 0; color: var(--muted); font-size: 16px; max-width: 34ch; line-height: 1.35; }
+.stprog { width: 100%; height: 6px; border-radius: 99px; background: var(--raised); overflow: hidden; }
+.stprog span { display: block; height: 100%; background: var(--accent); transition: width .25s linear; }
+.stnav { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 8px; width: 100%; }
 .exfoot { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
 .exfoot b { color: var(--fg); font-weight: 600; }
 .exmenu { display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px dashed var(--line); padding-top: 10px; }
@@ -772,7 +788,7 @@ function renderLog() {
   }
   const isToday = w.date === today();
   html += `<div class="row between" style="flex-wrap:nowrap">
-    <div class="field" style="flex:1"><span class="lbl">${isToday ? "Today's session" : "Editing session"}</span><input type="date" class="inp" id="wdate" data-f="wdate" value="${esc(w.date)}" max="${today()}"></div>
+    <div class="field" style="flex:1"><span class="lbl">${isToday ? "Today's session" : "Editing session"}${w.day && DAYS[w.day] ? " · " + DAYS[w.day].label : ""}${w.stretched ? " · stretched ✓" : ""}</span><input type="date" class="inp" id="wdate" data-f="wdate" value="${esc(w.date)}" max="${today()}"></div>
     <button class="btn primary" data-act="finish-workout" style="align-self:flex-end">Finish</button></div>`;
   html += w.exercises.map((e, ei) => exBlock(w, e, ei)).join("");
   html += `<button class="btn xl block" data-act="add-ex">+ Add exercise</button>`;
@@ -1044,11 +1060,11 @@ function renderStats() {
 const picker = { q: "", g: "All" };
 function openSheet(html) { $("#sheet").innerHTML = `<div class="scrim" data-act="close-scrim"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`; }
 function closeSheet() { $("#sheet").innerHTML = ""; }
-function openPicker() {
-  picker.q = ""; picker.g = "All"; picker.sub = "All";
+function openPicker(g0) {
+  picker.q = ""; picker.g = g0 && TOP.includes(g0) ? g0 : "All"; picker.sub = "All";
   openSheet(`<div class="sh-head"><div class="row between"><h3>Add exercise</h3><button class="btn sm ghost" data-act="close-sheet">Close</button></div>
     <input class="inp left" id="pk-q" placeholder="Search exercises" autocomplete="off" aria-label="Search exercises">
-    <div class="chips scroll" id="pk-g">${["All"].concat(TOP).map(g => `<button class="chip" data-act="pk-g" data-g="${esc(g)}" aria-pressed="${g === "All"}">${esc(g)}</button>`).join("")}</div></div>
+    <div class="chips scroll" id="pk-g">${["All"].concat(TOP).map(g => `<button class="chip" data-act="pk-g" data-g="${esc(g)}" aria-pressed="${g === picker.g}">${esc(g)}</button>`).join("")}</div></div>
     <div class="sh-body" id="pk-list"></div>`);
   pickerList();
 }
@@ -1251,6 +1267,105 @@ function restStart(sec) {
 }
 function restStop() { rest.end = 0; rest.done = false; clearInterval(rest.t); restDraw(); }
 document.addEventListener("visibilitychange", () => { if (!document.hidden && rest.end) restDraw(); });
+/* ---------- Pre-lift stretching (dynamic, about 5 minutes) ---------- */
+const MV = {
+  jacks: ["Jumping jacks", "Easy pace. Just get your heart rate up."],
+  highknees: ["High knees", "Jog in place, knees to hip height."],
+  armcircles: ["Arm circles", "15s forward, 15s backward. Start small, go bigger."],
+  armswings: ["Arm swings", "Swing arms open wide, then hug across your chest."],
+  passthru: ["Shoulder pass-throughs", "Wide grip on a band, towel or PVC. Over your head and behind, slowly."],
+  scappush: ["Scap push-ups", "Plank with straight arms. Pinch and spread your shoulder blades only."],
+  pecopen: ["Wall pec opener", "Forearm on a wall or rack, gently turn away. Pulse in and out, 15s per side."],
+  openbook: ["Open books", "Lie on your side, knees bent, rotate your top arm open. 15s per side."],
+  catcow: ["Cat-cow", "On all fours, round then arch your back. Slow and controlled."],
+  tricreach: ["Overhead tricep reach", "Hand behind your head, gently press the elbow back. Alternate arms."],
+  pushups: ["Slow push-ups", "Easy reps, full control. Stop well short of tired."],
+  hang: ["Dead hang", "Hang from a bar, relax your shoulders. Break it up if needed."],
+  scappull: ["Scap pull-ups", "Hang, then pull your shoulder blades down without bending your arms."],
+  needle: ["Thread the needle", "On all fours, reach one arm under and through. 15s per side."],
+  latpulse: ["Lat stretch", "Hands on a rack or bench, sink your hips back. Pulse, 15s per side."],
+  ytw: ["Y-T-W raises", "Bent over, thumbs up, make a Y, then T, then W. No weight."],
+  wrist: ["Wrist circles + forearm stretch", "Circle both ways, then gently pull fingers back on each hand."],
+  bicwall: ["Bicep wall stretch", "Palm on a wall behind you, turn away gently. 15s per side."],
+  legfb: ["Leg swings, front to back", "Hold something for balance. 15s per leg."],
+  legside: ["Leg swings, side to side", "Swing across your body and out. 15s per leg."],
+  squats: ["Bodyweight squats", "Slow, sit deep, chest up."],
+  wgs: ["World's greatest stretch", "Lunge, elbow to instep, rotate your arm to the ceiling. 15s per side."],
+  lunges: ["Walking lunges", "Long steps, back knee kisses the floor."],
+  ninety: ["90/90 hip switches", "Sit with both knees bent 90°, rotate side to side."],
+  bridges: ["Glute bridges", "Squeeze at the top for a second each rep."],
+  ankles: ["Ankle rocks", "Half-kneeling, drive your front knee past your toes. 15s per side."],
+  inchworm: ["Inchworms", "Walk your hands out to a plank, then walk them back."]
+};
+const DAYS = {
+  push: { label: "Push", sub: "Chest, shoulders, triceps", pick: "Chest", m: ["jacks", "armcircles", "armswings", "pecopen", "scappush", "openbook", "passthru", "catcow", "tricreach", "pushups"] },
+  pull: { label: "Pull", sub: "Back, biceps, rear delts", pick: "Back", m: ["jacks", "armcircles", "hang", "scappull", "catcow", "needle", "latpulse", "passthru", "ytw", "bicwall"] },
+  legs: { label: "Legs", sub: "Quads, hamstrings, glutes, calves", pick: "Legs", m: ["highknees", "legfb", "legside", "squats", "wgs", "lunges", "ninety", "bridges", "ankles", "inchworm"] },
+  upper: { label: "Upper", sub: "Push and pull together", pick: "All", m: ["jacks", "armcircles", "scappush", "needle", "passthru", "pecopen", "hang", "catcow", "ytw", "pushups"] },
+  arms: { label: "Arms", sub: "Biceps, triceps, forearms", pick: "Biceps", m: ["jacks", "armcircles", "armswings", "wrist", "bicwall", "tricreach", "passthru", "pecopen", "scappush", "pushups"] },
+  full: { label: "Full body", sub: "A bit of everything", pick: "All", m: ["jacks", "armcircles", "legfb", "wgs", "squats", "inchworm", "passthru", "catcow", "scappush", "bridges"] }
+};
+const ST_SEC = 30;
+const st = { day: null, i: 0, end: 0, left: ST_SEC, paused: false, t: null, lock: null };
+function blip() {
+  try { const c = rest.ctx; if (!c) return; const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 660; g.gain.setValueAtTime(0.0001, c.currentTime); g.gain.exponentialRampToValueAtTime(0.3, c.currentTime + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.15); o.connect(g).connect(c.destination); o.start(); o.stop(c.currentTime + 0.16); } catch (e) {}
+}
+function openDayPick() {
+  openSheet(`<div class="sh-head"><div class="row between"><h3>What are you hitting?</h3><button class="btn sm ghost" data-act="close-sheet">Close</button></div>
+    <span class="small muted">Pick your day and you'll get a 5 minute stretch routine for it before you lift.</span></div>
+    <div class="sh-body"><div class="daygrid">${Object.entries(DAYS).map(([k, d]) => `<button class="daybtn" data-act="day-pick" data-day="${k}"><b>${d.label}</b><span>${d.sub}</span></button>`).join("")}</div>
+    <button class="btn ghost block" data-act="begin-lift">Skip stretching, just log</button></div>`);
+}
+function openStretchIntro(day) {
+  st.day = day; const d = DAYS[day];
+  openSheet(`<div class="sh-head"><div class="row between"><h3>${d.label} day stretch · 5:00</h3><button class="btn sm ghost" data-act="close-sheet">Close</button></div>
+    <span class="small muted">Dynamic moves, 30 seconds each. Keep it easy, this is to loosen up, not to get tired.</span></div>
+    <div class="sh-body"><div class="stlist">${d.m.map((k, i) => `<div><i>${i + 1}</i><span>${esc(MV[k][0])}</span><i>0:30</i></div>`).join("")}</div>
+    <button class="btn primary xl block" data-act="st-go">Start stretching</button>
+    <button class="btn ghost block" data-act="begin-lift" data-day="${day}">Skip today, just lift</button></div>`);
+}
+function stDraw() {
+  const box = document.getElementById("st-run"); if (!box) { clearInterval(st.t); return; }
+  const d = DAYS[st.day], n = d.m.length;
+  if (st.i >= n) {
+    box.innerHTML = `<div class="strun"><div class="clock" style="color:var(--good)">✓</div><h2>You're loose</h2><p>5 minutes done. Time to lift 💪</p>
+      <button class="btn primary xl block" data-act="begin-lift" data-day="${st.day}" data-st="1">Start lifting</button></div>`;
+    return;
+  }
+  if (!st.paused) st.left = Math.max(0, (st.end - Date.now()) / 1000);
+  if (!st.paused && st.left <= 0) { stGoto(st.i + 1, true); return; }
+  const [name, cue] = MV[d.m[st.i]], next = d.m[st.i + 1];
+  const done = (st.i + (1 - st.left / ST_SEC)) / n * 100;
+  box.innerHTML = `<div class="strun">
+    <span class="lbl">${st.i + 1} of ${n} · ${mmss(Math.ceil((n - st.i - 1) * ST_SEC + st.left))} left</span>
+    <div class="clock ${st.paused ? "paused" : ""}">${Math.ceil(st.left)}</div>
+    <h2>${esc(name)}</h2><p>${esc(cue)}</p>
+    <div class="stprog"><span style="width:${done}%"></span></div>
+    <span class="small muted">${next ? "Next: " + esc(MV[next][0]) : "Last one"}</span>
+    <div class="stnav"><button class="btn" data-act="st-nav" data-d="-1" ${st.i === 0 ? "disabled" : ""}>Back</button>
+      <button class="btn primary" data-act="st-pause">${st.paused ? "Resume" : "Pause"}</button>
+      <button class="btn" data-act="st-nav" data-d="1">Next</button></div>
+    <button class="btn sm ghost" data-act="begin-lift" data-day="${st.day}" data-st="1">End early and start lifting</button></div>`;
+}
+function stGoto(i, auto) {
+  st.i = Math.max(0, i); st.left = ST_SEC; st.paused = false; st.end = Date.now() + ST_SEC * 1000;
+  if (auto) { if (st.i >= DAYS[st.day].m.length) restBeep(); else blip(); }
+  stDraw();
+}
+async function stStart() {
+  openSheet(`<div class="sh-head"><div class="row between"><h3>${DAYS[st.day].label} day stretch</h3><button class="btn sm ghost" data-act="st-quit">Quit</button></div></div><div class="sh-body" id="st-run"></div>`);
+  try { if (navigator.wakeLock) st.lock = await navigator.wakeLock.request("screen"); } catch (e) {}
+  clearInterval(st.t); st.t = setInterval(stDraw, 250); stGoto(0);
+}
+function stStop() { clearInterval(st.t); st.t = null; try { if (st.lock) st.lock.release(); } catch (e) {} st.lock = null; }
+document.addEventListener("visibilitychange", () => { if (!document.hidden && st.t && navigator.wakeLock) navigator.wakeLock.request("screen").then(l => { st.lock = l; }).catch(() => {}); });
+function beginLift(day, stretched) {
+  stStop(); closeSheet();
+  const id = uid("w");
+  S.workouts[id] = Object.assign({ id, date: today(), created: Date.now(), exercises: [] }, day ? { day } : {}, stretched ? { stretched: true } : {});
+  ui.editing = id; saveUI(); touch(); render();
+  openPicker(day && DAYS[day] ? DAYS[day].pick : "All");
+}
 document.addEventListener("focusin", ev => {
   const t = ev.target; if (!t.dataset || t.dataset.f !== "w") return;
   const w = curW(); const e = w && w.exercises[+t.dataset.ei]; if (!e || !BARBELL.has(e.exId)) return;
@@ -1284,13 +1399,15 @@ document.addEventListener("click", ev => {
   const b = ev.target.closest("[data-act]"); if (!b) return;
   const a = b.dataset.act, ei = +b.dataset.ei, si = +b.dataset.si, w = curW();
   switch (a) {
-    case "close-scrim": if (ev.target === b) closeSheet(); return;
-    case "close-sheet": closeSheet(); render(); return;
-    case "start-workout": {
-      const id = uid("w");
-      S.workouts[id] = { id, date: today(), created: Date.now(), exercises: [] };
-      ui.editing = id; saveUI(); touch(); render(); openPicker(); return;
-    }
+    case "close-scrim": if (ev.target === b) { stStop(); closeSheet(); } return;
+    case "close-sheet": stStop(); closeSheet(); render(); return;
+    case "start-workout": openDayPick(); return;
+    case "day-pick": openStretchIntro(b.dataset.day); return;
+    case "st-go": stStart(); return;
+    case "st-nav": stGoto(st.i + (+b.dataset.d)); return;
+    case "st-pause": if (st.paused) { st.paused = false; st.end = Date.now() + st.left * 1000; } else { st.paused = true; } stDraw(); return;
+    case "st-quit": stStop(); closeSheet(); render(); return;
+    case "begin-lift": beginLift(b.dataset.day || null, b.dataset.st === "1"); return;
     case "rest-add": { const d = +b.dataset.s; if (rest.done) { if (d > 0) restStart(d); return; } rest.end = Math.max(Date.now(), rest.end + d * 1000); rest.total = Math.max(1, rest.total + d); restDraw(); return; }
     case "rest-stop": restStop(); return;
     case "rest-len": { const i = REST_OPTS.indexOf(rest.dur); rest.dur = REST_OPTS[(i + 1) % REST_OPTS.length]; store.set("overload.rest.v1", rest.dur); toast("Default rest: " + mmss(rest.dur)); if (!rest.done) restStart(); else restDraw(); return; }
