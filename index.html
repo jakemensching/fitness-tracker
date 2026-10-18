@@ -201,6 +201,17 @@ input[type="date"].inp { font-size: 17px; text-align: left; }
 .setn { height: 48px; border-radius: 10px; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 18px; color: var(--muted); background: var(--raised); }
 .setn.is-pr { background: var(--pr); color: #fff; font-size: 13px; letter-spacing: .04em; }
 .xbtn { width: 40px; height: 48px; border: 0; background: none; color: var(--faint); font-size: 22px; border-radius: 10px; }
+.plates { font-size: 14px; color: var(--muted); min-height: 20px; }
+.plates b { color: var(--fg); }
+#rest { position: fixed; left: 0; right: 0; bottom: calc(61px + env(safe-area-inset-bottom, 0px)); z-index: 24; display: flex; justify-content: center; padding: 0 12px 8px; pointer-events: none; }
+#rest .rb { pointer-events: auto; width: 100%; max-width: 616px; display: flex; align-items: center; gap: 8px; background: var(--raised); border: 1px solid var(--line); border-radius: 14px; padding: 8px 8px 8px 14px; box-shadow: 0 6px 24px rgb(0 0 0 / .3); position: relative; overflow: hidden; }
+#rest .rbar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); transition: width .25s linear; }
+#rest .rt { font-family: "Barlow Condensed", system-ui, sans-serif; font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 72px; background: none; border: 0; color: var(--fg); text-align: left; padding: 0; }
+#rest .rl { flex: 1; font-size: 13px; color: var(--muted); line-height: 1.2; }
+body.resting main .col { padding-bottom: calc(170px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 359px) { #rest .rl { display: none; } }
+#rest.done .rb { border-color: var(--accent); }
+#rest.done .rt { color: var(--accent); }
 .exfoot { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
 .exfoot b { color: var(--fg); font-weight: 600; }
 .exmenu { display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px dashed var(--line); padding-top: 10px; }
@@ -349,6 +360,7 @@ header.top .spacer { flex-shrink: 1; min-width: 0; }
 
 <div id="sheet"></div>
 <div id="toast" hidden></div>
+<div id="rest" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
@@ -367,6 +379,18 @@ const groupLabel = g => PARENT[g] ? PARENT[g] + " · " + g : g;
 const groupOptions = sel => TOP.map(c => SUBS[c]
   ? `<optgroup label="${c}">${SUBS[c].map(g => `<option value="${g}" ${g === sel ? "selected" : ""}>${g}</option>`).join("")}</optgroup>`
   : `<option value="${c}" ${c === sel ? "selected" : ""}>${c}</option>`).join("");
+const BARBELL = new Set(["bench", "incline", "ohp", "row", "squat", "front-squat", "deadlift", "rdl", "sldl", "curl", "hip-thrust", "skull"]);
+const PLATES = [45, 35, 25, 10, 5, 2.5];
+function platesTxt(w) {
+  if (w == null || !(w > 0)) return "";
+  if (w < 45) return "Less than the bar (45)";
+  let side = (w - 45) / 2; const out = [];
+  for (const p of PLATES) while (side >= p - 1e-9) { out.push(p); side = Math.round((side - p) * 100) / 100; }
+  if (!out.length) return "Just the bar";
+  const grouped = []; out.forEach(p => { const g = grouped.find(x => x.p === p); if (g) g.n++; else grouped.push({ p, n: 1 }); });
+  return `<b>${grouped.map(g => (g.n > 1 ? g.n + "×" : "") + fmtW(g.p)).join(" + ")}</b> per side` + (side > 0 ? ` <span class="muted">(${fmtW(side * 2)} short)</span>` : "");
+}
+function platesFor(ei, w) { const el = document.getElementById("pl-" + ei); if (el) el.innerHTML = w > 0 ? `Plates for ${fmtW(w)}: ${platesTxt(w)}` : "Tap a weight to see plates"; }
 const LOWER = new Set(["Quads", "Hamstrings", "Glutes", "Adductors", "Abductors", "Calves"]);
 const WEAK = new Set(["Upper Chest", "Quads", "Hamstrings", "Glutes", "Adductors", "Abductors", "Calves"]); // 3 sets to failure by default
 const LAT_FOCUS = new Set(["pullup", "chinup", "pulldown", "sa-pulldown", "pullover"]); // Back, but lats are a weak spot: 3 sets
@@ -825,6 +849,7 @@ function exBlock(w, e, ei) {
     <button class="iconbtn" data-act="ex-menu" data-ei="${ei}" aria-label="Exercise options" aria-expanded="${ui.openMenu === ei}"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></header>
     ${menu}${beat}
     <div class="setgrid"><span class="hd">Set</span><span class="hd">${unit}</span><span class="hd">Reps</span><span class="hd">RPE</span><span></span>${rows}</div>
+    ${BARBELL.has(e.exId) ? `<div class="plates" id="pl-${ei}">${(() => { const lw = [...(e.sets || [])].reverse().find(s => s.w > 0); return lw ? `Plates for ${fmtW(lw.w)}: ${platesTxt(lw.w)}` : "Tap a weight to see plates"; })()}</div>` : ""}
     <button class="btn block" data-act="add-set" data-ei="${ei}">+ Add set</button>
     <div class="exfoot" id="ef-${ei}">${exFoot(e, ex, bwv)}</div>
   </section>`;
@@ -1235,6 +1260,44 @@ function makeSample() {
 
 /* ---------- Actions ---------- */
 let toastT;
+/* ---------- Rest timer ---------- */
+const REST_OPTS = [60, 90, 120, 150, 180, 240];
+const rest = { end: 0, dur: store.get("overload.rest.v1", 120), t: null, done: false, ctx: null };
+function restBeep() {
+  try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+  try {
+    const c = rest.ctx; if (!c) return;
+    [0, 0.25].forEach(at => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.0001, c.currentTime + at); g.gain.exponentialRampToValueAtTime(0.4, c.currentTime + at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + at + 0.18); o.connect(g).connect(c.destination); o.start(c.currentTime + at); o.stop(c.currentTime + at + 0.2); });
+  } catch (e) {}
+}
+document.addEventListener("touchstart", () => { // iOS only plays sound after a tap
+  try { if (!rest.ctx) rest.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (rest.ctx.state === "suspended") rest.ctx.resume(); } catch (e) {}
+}, { passive: true });
+const mmss = s => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+function restDraw() {
+  const el = $("#rest"); if (!el) return;
+  document.body.classList.toggle("resting", !!rest.end);
+  if (!rest.end) { el.hidden = true; return; }
+  const left = Math.max(0, Math.ceil((rest.end - Date.now()) / 1000));
+  if (!left && !rest.done) { rest.done = true; restBeep(); }
+  el.hidden = false; el.classList.toggle("done", rest.done);
+  el.innerHTML = `<div class="rb"><button class="rt" data-act="rest-len" aria-label="Change rest length">${rest.done ? "Go" : mmss(left)}</button>
+    <span class="rl">${rest.done ? "Rest's up 💪" : "Rest<br>default " + mmss(rest.dur)}</span>
+    <button class="btn sm" data-act="rest-add" data-s="-15">−15</button><button class="btn sm" data-act="rest-add" data-s="15">+15</button>
+    <button class="btn sm" data-act="rest-stop">${rest.done ? "Close" : "Skip"}</button>
+    <span class="rbar" style="width:${rest.done ? 100 : Math.min(100, 100 - (left / rest.total) * 100)}%"></span></div>`;
+}
+function restStart(sec) {
+  rest.total = sec || rest.dur; rest.end = Date.now() + rest.total * 1000; rest.done = false;
+  clearInterval(rest.t); rest.t = setInterval(() => { restDraw(); if (rest.done && Date.now() - rest.end > 60000) restStop(); }, 250); restDraw();
+}
+function restStop() { rest.end = 0; rest.done = false; clearInterval(rest.t); restDraw(); }
+document.addEventListener("visibilitychange", () => { if (!document.hidden && rest.end) restDraw(); });
+document.addEventListener("focusin", ev => {
+  const t = ev.target; if (!t.dataset || t.dataset.f !== "w") return;
+  const w = curW(); const e = w && w.exercises[+t.dataset.ei]; if (!e || !BARBELL.has(e.exId)) return;
+  platesFor(+t.dataset.ei, num(t.value) != null ? num(t.value) : num(t.placeholder));
+});
 function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 2600); }
 function armed(btn, label) {
   if (btn.dataset.armed === "1") return true;
@@ -1270,7 +1333,11 @@ document.addEventListener("click", ev => {
       S.workouts[id] = { id, date: today(), created: Date.now(), exercises: [] };
       ui.editing = id; saveUI(); touch(); render(); openPicker(); return;
     }
+    case "rest-add": { const d = +b.dataset.s; if (rest.done) { if (d > 0) restStart(d); return; } rest.end = Math.max(Date.now(), rest.end + d * 1000); rest.total = Math.max(1, rest.total + d); restDraw(); return; }
+    case "rest-stop": restStop(); return;
+    case "rest-len": { const i = REST_OPTS.indexOf(rest.dur); rest.dur = REST_OPTS[(i + 1) % REST_OPTS.length]; store.set("overload.rest.v1", rest.dur); toast("Default rest: " + mmss(rest.dur)); if (!rest.done) restStart(); else restDraw(); return; }
     case "finish-workout": {
+      restStop();
       if (w) {
         const has = w.exercises.some(e => (e.sets || []).some(s => validSet(s, getEx(e.exId))));
         if (!has) { delete S.workouts[w.id]; writeOp("w:" + w.id, "del"); toast("Empty session discarded"); }
@@ -1337,9 +1404,11 @@ document.addEventListener("input", ev => {
   if (f === "w" && v != null && v < 0) v = 0;
   s[f] = v;
   saveWorkout(w.id); liveUpdate(ei);
+  if (f === "w" && BARBELL.has(w.exercises[ei].exId)) platesFor(ei, v);
 });
 document.addEventListener("change", ev => {
   const t = ev.target;
+  if (t.dataset && t.dataset.f === "r" && num(t.value) > 0 && curW() && !DEMO) restStart();
   if (t.id === "wdate") { const w = curW(); if (w && t.value) { w.date = t.value; saveWorkout(w.id, true); render(); } return; }
   if (t.id === "prog-ex") { ui.progEx = t.value; saveUI(); render(); return; }
   if (t.id === "imp" && t.files && t.files[0]) { onImportFile(t.files[0]); t.value = ""; return; }
