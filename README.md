@@ -9,6 +9,7 @@ A personal, mobile-first workout tracker built around progressive overload and b
 - **PR badge** shows the moment a set beats your previous best weight or e1RM.
 - **Body weight** logging with a 7-day moving average.
 - **Edit or delete** any session or weigh-in.
+- **Steps from Apple Health**: an iPhone Shortcut sends each day's step count. Steps show on the Log tab and in a Steps section on the Body tab (today, 7-day average of completed days, week-over-week change, daily chart).
 
 ### Calculations
 
@@ -48,6 +49,17 @@ The palette is light from first light to last light (civil twilight, sun 6° bel
 4. Authentication > Sign In / Providers: turn off "Allow new users to sign up" so nobody else can make an account.
 5. Project Settings > API: copy the Project URL and the anon public key into `head.html`, run `./build.sh`, push.
 6. Open the Pages site, tap the gear, sign in. Anything already logged on that device uploads on first sign-in.
+
+### Apple Health steps
+
+Web apps can't read Apple Health, so an iOS Shortcut does it and posts the count to Supabase.
+
+1. SQL Editor: run `supabase/steps.sql` once (after `schema.sql`).
+2. In the app: gear menu > Apple Health steps > Create Shortcut key. The key is shown once and only its SHA-256 hash is stored.
+3. Follow the in-app guide to build the Shortcut. It runs Find Health Samples (Steps, today, grouped by day), then POSTs `{ p_token, p_steps }` to `/rest/v1/rpc/overload_log_steps` with the anon key.
+4. Add a Time of Day automation (11:55 PM daily, Run Immediately) that runs the Shortcut. Extra runs during the day are fine; each one replaces that day's count.
+
+The key can only write step counts as `s:YYYY-MM-DD` rows. It can't read anything. Making a new key turns off the old one. `p_day` (YYYY-MM-DD) is optional and defaults to today in Central time.
 - The settings menu (gear icon) has Export JSON, Sets CSV, Body weight CSV and Import JSON (merge) for backups and moving data.
 
 To add your own sync backend, replace `writeOp`, `flush` and `initCloud` in `index.html`. The data shapes stay the same:
@@ -79,6 +91,7 @@ On iPhone, the installed app has its own storage, separate from Safari. Data onl
 | `index.html` | Built output, `head.html` + `src/app.html`. Run `./build.sh` after editing either |
 | `manifest.json` | App name, icons, standalone display, colors |
 | `supabase/schema.sql` | Table and row level security for Supabase sync |
+| `supabase/steps.sql` | Apple Health steps: Shortcut key table and the `overload_log_steps` function |
 | `sw.js` | Service worker: offline app shell, network-first page loads so updates arrive on next open |
 | `icons/`, `favicon.svg`, `apple-touch-icon.png` | Plate stack icons |
 

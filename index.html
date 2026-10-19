@@ -286,6 +286,19 @@ header.top .spacer { flex-shrink: 1; min-width: 0; }
   .setgrid { grid-template-columns: 32px minmax(0,1.3fr) minmax(0,1fr) minmax(0,.8fr) 34px; gap: 6px; }
   .grid3 { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
+/* Steps */
+.stepline { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; width: 100%; cursor: pointer; }
+.stepline > div { display: flex; flex-direction: column; gap: 4px; }
+.stepline .right { align-items: flex-end; line-height: 1.5; }
+.stepline .big-num { font-size: 26px; }
+.stepline .grow { flex: 1; min-width: 0; }
+.copyrow { display: flex; gap: 8px; align-items: center; }
+.copyrow .inp { min-height: 42px; font-size: 13px; text-align: left; font-weight: 500; font-family: ui-monospace, Menlo, monospace; padding: 0 10px; min-width: 0; text-overflow: ellipsis; }
+.copyrow .btn { flex: none; }
+.guide { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; font-size: 15px; }
+.guide li::marker { font-family: var(--display); font-weight: 700; color: var(--accent); }
+.guide b { font-weight: 600; }
+.guide code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; overflow-wrap: anywhere; }
 </style>
 
 <script>
@@ -452,19 +465,19 @@ const store = {
 
 /* ---------- State ---------- */
 const K = { cache: "overload.cache.v1", pending: "overload.pending.v1", ui: "overload.ui.v1" };
-let S = { meta: { custom: [], ex: {} }, workouts: {}, bw: {} };
+let S = { meta: { custom: [], ex: {} }, workouts: {}, bw: {}, steps: {} };
 let REAL = null;            // real data stashed while sample mode is on
 let DEMO = false;
-const ui = Object.assign({ tab: "log", editing: null, progEx: null, range: "3m", bwRange: "3m", openMenu: null }, store.get(K.ui, {}));
+const ui = Object.assign({ tab: "log", editing: null, progEx: null, range: "3m", bwRange: "3m", stRange: "4w", openMenu: null }, store.get(K.ui, {}));
 ui.openMenu = null;
 let pending = store.get(K.pending, []);
 let DB = null, BASE = null, offline = false, ver = 0;
 const dirtyW = new Set();
-const saveUI = () => store.set(K.ui, { tab: ui.tab, editing: ui.editing, progEx: ui.progEx, range: ui.range, bwRange: ui.bwRange });
+const saveUI = () => store.set(K.ui, { tab: ui.tab, editing: ui.editing, progEx: ui.progEx, range: ui.range, bwRange: ui.bwRange, stRange: ui.stRange });
 
 function loadCache() {
   const c = store.get(K.cache, null);
-  if (c) S = { meta: normMeta(c.meta), workouts: c.workouts || {}, bw: c.bw || {} };
+  if (c) S = { meta: normMeta(c.meta), workouts: c.workouts || {}, bw: c.bw || {}, steps: c.steps || {} };
   applyPending();
 }
 function saveCache() { if (!DEMO) store.set(K.cache, S); }
@@ -486,14 +499,14 @@ function applyPending() {
   for (const p of pending) {
     if (p.k === "meta") { if (p.data) S.meta = normMeta(clone(p.data)); continue; }
     const [t, id] = [p.k[0], p.k.slice(2)];
-    const bag = t === "w" ? S.workouts : S.bw;
+    const bag = t === "w" ? S.workouts : t === "s" ? S.steps : S.bw;
     if (p.op === "del") delete bag[id]; else bag[id] = clone(p.data);
   }
 }
 function refFor(k) {
   const m = DB.doc(BASE);
   if (k === "meta") return m;
-  return k[0] === "w" ? m.collection("workouts").doc(k.slice(2)) : m.collection("bw").doc(k.slice(2));
+  return m.collection(k[0] === "w" ? "workouts" : k[0] === "s" ? "steps" : "bw").doc(k.slice(2));
 }
 let flushing = false;
 async function flush() {
@@ -538,7 +551,7 @@ function syncPill() {
 /* ---------- Supabase sync (GitHub Pages build) ----------
    Mimics the doc/collection/onSnapshot shape of the Claude store so flush() and
    the snapshot handlers work unchanged. One table, one row per key:
-   "meta", "w:<workout id>", "b:<YYYY-MM-DD>". */
+   "meta", "w:<workout id>", "b:<YYYY-MM-DD>", "s:<YYYY-MM-DD>" (steps, written by the Apple Health Shortcut). */
 const SUPA_CFG = window.OVERLOAD_SUPABASE && window.OVERLOAD_SUPABASE.url && window.OVERLOAD_SUPABASE.key ? window.OVERLOAD_SUPABASE : null;
 const SUPA_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
 let SB = null, SB_USER = null;
@@ -580,7 +593,7 @@ function supaAdapter(sb, userId) {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
   window.addEventListener("online", refresh);
   const coll = name => {
-    const pre = name === "workouts" ? "w" : "b";
+    const pre = name === "workouts" ? "w" : name === "steps" ? "s" : "b";
     return {
       doc: id => ref(pre + ":" + id),
       onSnapshot(cb, onErr) { watch(pre, r => cb({ docs: r.map(x => ({ id: x.k.slice(2), data: () => x.data })) }), onErr); }
@@ -672,6 +685,12 @@ function attachSnapshots() {
     q.docs.forEach(d => { next[d.id] = clone(d.data()); });
     S.bw = next; applyPending(); touch(); saveCache(); requestRender(true);
   }, onErr);
+  m.collection("steps").onSnapshot(q => {
+    if (DEMO) return;
+    const next = {};
+    q.docs.forEach(d => { const v = d.data(); if (v && v.date) next[d.id] = clone(v); });
+    S.steps = next; applyPending(); touch(); saveCache(); requestRender(true);
+  }, () => {});
   flush(); syncPill();
 }
 
@@ -820,6 +839,10 @@ function renderLog() {
       <button class="btn primary" type="submit" style="flex:none">Log</button>
     </div>
   </form>`;
+  const sst = stepStats();
+  if (sst) html += `<button class="card stepline" data-act="go-steps" style="text-align:left;font:inherit;color:inherit">
+    <div class="grow"><span class="lbl">Steps today</span><div class="big-num">${sst.today == null ? "–" : r0(sst.today)}</div></div>
+    <div class="right small muted"><span>7-day avg <b class="up">${sst.avg7 == null ? "–" : r0(sst.avg7)}</b></span>${sst.last.at ? "<span>Health · " + fmtAt(sst.last.at) + "</span>" : ""}</div></button>`;
   const w = ui.editing && S.workouts[ui.editing];
   if (!w) {
     ui.editing = null;
@@ -1016,6 +1039,23 @@ function drawProgress() {
   }
 }
 
+/* Steps (from Apple Health via the Shortcut) */
+function stepList() {
+  return Object.values(S.steps || {}).filter(e => e && e.date && e.steps >= 0).map(e => ({ date: e.date, steps: e.steps, at: e.at, n: dn(e.date) })).sort((a, b) => a.n - b.n);
+}
+function stepAvg(endN, days) {
+  const L = stepList().filter(e => e.n <= endN && e.n > endN - days);
+  return L.length ? L.reduce((a, e) => a + e.steps, 0) / L.length : null;
+}
+function stepStats() {
+  const L = stepList(); if (!L.length) return null;
+  const t = dn(today()), last = L[L.length - 1], todayE = S.steps[today()];
+  // Averages use completed days only, so a half-finished today doesn't drag them down.
+  const avg7 = stepAvg(t - 1, 7), prev7 = stepAvg(t - 8, 7);
+  return { last, today: todayE ? todayE.steps : null, avg7, prev7, change: avg7 != null && prev7 ? (avg7 - prev7) / prev7 : null };
+}
+const fmtAt = iso => { const d = new Date(iso); if (!isFinite(d)) return ""; const same = d.toDateString() === new Date().toDateString(); return (same ? "today " : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " ") + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
+
 /* Body weight tab */
 function bwStats() {
   const L = bwList(), cur = currentBW();
@@ -1023,6 +1063,40 @@ function bwStats() {
   const t = dn(today()), ago = bwAvgAt(t - 28);
   const hasAgo = L[0].n <= t - 28;
   return { cur, start: L[0], sinceStart: cur - L[0].w, four: hasAgo && ago != null ? cur - ago : null, last: L[L.length - 1] };
+}
+function renderSteps() {
+  const sst = stepStats();
+  let html = `<h2 id="steps-h" style="margin-top:8px">Steps</h2>`;
+  if (!sst) {
+    const how = SB_USER ? `<button class="btn primary" data-act="open-health">Connect Apple Health</button>`
+      : SUPA_CFG ? `<span class="small muted">Sign in from the gear menu first, then connect Apple Health there.</span>`
+      : `<span class="small muted">Steps come in from Apple Health in the installed phone app.</span>`;
+    return html + `<div class="empty"><h3>Bring in your steps</h3><span>An iPhone Shortcut sends your daily step count from Apple Health. Set it up once and it runs on its own.</span>${how}</div>`;
+  }
+  const ch = sst.change == null ? "" : `<span class="small muted">${sst.change >= 0 ? "+" : "−"}${Math.abs(Math.round(sst.change * 100))}% vs last week</span>`;
+  html += `<div class="grid3">
+    <div class="tile"><span class="lbl">Today</span><div class="big-num">${sst.today == null ? "–" : r0(sst.today)}</div>${sst.today == null ? '<span class="small muted">No count yet</span>' : ""}</div>
+    <div class="tile"><span class="lbl">7-day avg</span><div class="big-num">${sst.avg7 == null ? "–" : r0(sst.avg7)}</div>${ch || '<span class="small muted">Completed days</span>'}</div>
+    <div class="tile"><span class="lbl">Best day</span><div class="big-num">${r0(Math.max.apply(null, stepList().map(e => e.steps)))}</div><span class="small muted">${fmtD(stepList().reduce((a, e) => e.steps > a.steps ? e : a).date)}</span></div>
+  </div>
+  <div class="card"><div class="row between"><h3>Daily steps</h3><span class="small muted">Bars: days · Line: 7-day avg</span></div>${rangeChips("stRange")}<div class="chartbox"><canvas id="c-steps"></canvas></div>
+    <span class="small muted">${sst.last.at ? "Last update from Apple Health " + fmtAt(sst.last.at) + "." : ""}</span></div>`;
+  return html;
+}
+function drawSteps() {
+  if (typeof Chart === "undefined" || !$("#c-steps")) return;
+  const lo = rangeStart(ui.stRange), t = dn(today());
+  const first = Math.max(isFinite(lo) ? lo : (stepList()[0] || { n: t }).n, (stepList()[0] || { n: t }).n);
+  const days = []; for (let n = first; n <= t; n++) days.push(n);
+  const val = n => { const e = S.steps[ds(n)]; return e ? e.steps : null; };
+  const o = baseOpts();
+  o.scales.x.grid.display = false; o.scales.x.ticks.maxTicksLimit = 6; o.scales.x.ticks.autoSkip = true; o.scales.x.ticks.maxRotation = 0;
+  o.scales.y.beginAtZero = true;
+  o.plugins.tooltip.callbacks = { label: it => it.datasetIndex ? ` 7-day avg ${r0(it.parsed.y)}` : ` ${r0(it.parsed.y)} steps` };
+  charts.push(new Chart($("#c-steps"), { type: "bar", data: { labels: days.map(fmtDn), datasets: [
+    { type: "bar", data: days.map(val), backgroundColor: css("--blue"), borderRadius: 3, maxBarThickness: 18, order: 2 },
+    { type: "line", data: days.map(n => { const a = stepAvg(n === t ? t - 1 : n, 7); return a == null ? null : Math.round(a); }), borderColor: css("--accent-fill"), borderWidth: 2.5, pointRadius: 0, tension: 0.3, spanGaps: true, order: 1 }
+  ] }, options: o }));
 }
 function renderBody() {
   const st = bwStats(), L = bwList();
@@ -1036,7 +1110,7 @@ function renderBody() {
     </div>
     <div class="row"><button class="btn primary" type="submit" style="flex:1">${editing ? "Save changes" : "Save weigh-in"}</button>${editing ? '<button class="btn" type="button" data-act="bw-cancel">Cancel</button>' : ""}</div>
   </form>`;
-  if (!st) return html + `<div class="empty"><h3>No weigh-ins yet</h3><span>Weigh in a few mornings a week. The 7-day average smooths out water and food swings.</span></div>`;
+  if (!st) return html + `<div class="empty"><h3>No weigh-ins yet</h3><span>Weigh in a few mornings a week. The 7-day average smooths out water and food swings.</span></div>` + renderSteps();
   html += `<div class="grid3">
     <div class="tile"><span class="lbl">7-day avg</span><div class="big-num">${r1(st.cur)}</div></div>
     <div class="tile"><span class="lbl">Since start</span><div class="big-num">${signed(st.sinceStart)}</div><span class="small muted">from ${fmtW(st.start.w)} · ${fmtD(st.start.date)}</span></div>
@@ -1046,9 +1120,10 @@ function renderBody() {
   <div class="card"><span class="lbl">Weigh-ins</span><div class="list">${L.slice().reverse().map(e => `
     <div class="li"><div class="grow"><div class="name">${fmtW(e.w)} lbs</div><span class="small muted">${fmtD(e.date, { weekday: "short", year: "numeric" })}</span></div>
     <button class="btn sm" data-act="bw-edit" data-date="${e.date}">Edit</button><button class="btn sm danger" data-act="bw-del" data-date="${e.date}">Delete</button></div>`).join("")}</div></div>`;
-  return html;
+  return html + renderSteps();
 }
 function drawBody() {
+  drawSteps();
   if (typeof Chart === "undefined" || !$("#c-bw")) return;
   Chart.defaults.font.family = css("--body");
   const lo = rangeStart(ui.bwRange), L = bwList().filter(e => e.n >= lo);
@@ -1161,10 +1236,70 @@ function openSettings(focusId) {
         <input class="inp" data-set="min" data-id="${esc(e.id)}" inputmode="numeric" value="${e.min}" aria-label="${esc(e.name)} min reps">
         <input class="inp" data-set="max" data-id="${esc(e.id)}" inputmode="numeric" value="${e.max}" aria-label="${esc(e.name)} max reps"></div>`).join("")}
     </div>
+    ${SUPA_CFG ? '<div class="card" style="background:var(--raised)" id="health-card"></div>' : ""}
     <div class="card" style="background:var(--raised)" id="sky-card"></div>
   </div>`);
-  refreshSky();
+  refreshSky(); refreshHealth();
   if (focusId) { const el = document.getElementById("set-" + focusId); if (el) { el.scrollIntoView({ block: "center" }); el.style.background = "var(--raised)"; } }
+}
+
+/* Apple Health steps setup. The Shortcut key is shown once; only its hash is stored. */
+const health = { key: null, status: null, busy: false, err: "" };
+async function refreshHealth(loadStatus = true) {
+  const card = $("#health-card"); if (!card) return;
+  if (!SB_USER) { card.innerHTML = `<span class="lbl">Apple Health steps</span><span class="small muted">Sign in above, then come back here to connect your steps.</span>`; return; }
+  if (loadStatus && !health.status) {
+    card.innerHTML = `<span class="lbl">Apple Health steps</span><span class="small muted">Checking connection…</span>`;
+    try { const r = await SB.rpc("overload_steps_status"); if (r.error) throw r.error; health.status = r.data || {}; }
+    catch (e) { health.status = { missing: /function|schema cache|not find/i.test((e && e.message) || "") }; }
+  }
+  const st = health.status || {}, last = stepList().slice(-1)[0];
+  const endpoint = SUPA_CFG.url.replace(/\/$/, "") + "/rest/v1/rpc/overload_log_steps";
+  const copy = (id, label, value) => `<div class="field"><label class="lbl" for="${id}">${label}</label><div class="copyrow"><input class="inp" id="${id}" readonly value="${esc(value)}"><button class="btn sm" data-act="copy-field" data-for="${id}">Copy</button></div></div>`;
+  let body;
+  if (st.missing) {
+    body = `<span class="small">One-time database setup first: in Supabase, open <b>SQL Editor</b>, paste <code>supabase/steps.sql</code> from the repo and run it. Then close and reopen this menu.</span>`;
+  } else {
+    const statusTxt = st.last_used ? `Connected. Last count received ${fmtAt(st.last_used)}${last ? " (" + r0(last.steps) + " steps)" : ""}.`
+      : st.has_key ? "Key created. Waiting for the first count from your Shortcut." : "Not connected yet.";
+    body = `<span class="small">${statusTxt}</span>`;
+    if (health.key) {
+      body += `<span class="small"><b>Copy your Shortcut key now.</b> It's only shown this once. If you lose it, make a new one.</span>
+        ${copy("hk-url", "URL", endpoint)}
+        ${copy("hk-api", "apikey header", SUPA_CFG.key)}
+        ${copy("hk-auth", "Authorization header", "Bearer " + SUPA_CFG.key)}
+        ${copy("hk-key", "p_token (your Shortcut key)", health.key)}
+        <span class="lbl" style="margin-top:6px">Build the Shortcut (once)</span>
+        <ol class="guide">
+          <li>Open <b>Shortcuts</b>, tap <b>+</b>, and name it <b>Overload Steps</b>.</li>
+          <li>Add <b>Find Health Samples</b>. Set Type to <b>Steps</b>, add the filter <b>Start Date is Today</b>, and set <b>Group By</b> to <b>Day</b>. Grouping gives the same total the Health app shows.</li>
+          <li>Add <b>Get Details of Health Sample</b> and pick <b>Value</b>.</li>
+          <li>Add <b>Get Contents of URL</b> and paste the <b>URL</b>. Tap the arrow to expand it and set Method to <b>POST</b>.</li>
+          <li>Under <b>Headers</b>, add <code>apikey</code> with the apikey value, then <code>Authorization</code> with the Authorization value.</li>
+          <li>Set Request Body to <b>JSON</b>. Add a Text field <code>p_token</code> with your Shortcut key. Add a Text field <code>p_steps</code> and pick the <b>Value</b> variable from step 3.</li>
+          <li>Tap <b>▶</b>. Allow Health access and the connection to supabase.co. You should see <code>"ok" : true</code> with today's steps, and they show up here within seconds.</li>
+        </ol>
+        <span class="lbl" style="margin-top:6px">Make it automatic</span>
+        <ol class="guide" start="8">
+          <li>Go to <b>Automation</b>, tap <b>+</b>, pick <b>Time of Day</b>: <b>11:55 PM</b>, <b>Daily</b>, <b>Run Immediately</b>. Add the action <b>Run Shortcut</b> → <b>Overload Steps</b>.</li>
+          <li>Optional: add the same automation at <b>12:00 PM</b> and <b>6:00 PM</b> so steps update during the day. Each run replaces that day's count, so nothing double counts.</li>
+        </ol>`;
+    }
+    body += `<div class="row"><button class="btn sm ${health.key ? "" : "primary"}" data-act="health-key" ${health.busy ? "disabled" : ""}>${st.has_key || health.key ? "Make a new key" : "Create Shortcut key"}</button></div>`;
+    if (st.has_key && !health.key) body += `<span class="small muted">Making a new key turns off the old one. Paste the new key into your Shortcut's p_token field.</span>`;
+  }
+  if (health.err) body += `<span class="small" style="color:var(--pr)">${esc(health.err)}</span>`;
+  card.innerHTML = `<span class="lbl">Apple Health steps</span>` + body;
+}
+async function makeHealthKey(btn) {
+  if ((health.status || {}).has_key && !armed(btn, "Tap to replace")) return;
+  health.busy = true; health.err = ""; refreshHealth(false);
+  try {
+    const r = await SB.rpc("overload_new_steps_token"); if (r.error) throw r.error;
+    health.key = r.data; health.status = Object.assign({}, health.status, { has_key: true, last_used: null });
+  } catch (e) { health.err = "Couldn't make a key: " + ((e && e.message) || "check your connection") + "."; }
+  health.busy = false; refreshHealth(false);
+  const k = $("#hk-url"); if (k) k.closest(".card").scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
 function refreshSky() {
@@ -1198,14 +1333,16 @@ function csvEsc(v) { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '
 function exportData(kind) {
   const stamp = today();
   let name, data;
-  if (kind === "json") { name = `overload-backup-${stamp}.json`; data = JSON.stringify({ app: "overload", version: 1, exported: new Date().toISOString(), meta: S.meta, workouts: S.workouts, bw: S.bw }, null, 2); }
+  if (kind === "json") { name = `overload-backup-${stamp}.json`; data = JSON.stringify({ app: "overload", version: 1, exported: new Date().toISOString(), meta: S.meta, workouts: S.workouts, bw: S.bw, steps: S.steps }, null, 2); }
   else if (kind === "csv") {
     const rows = [["date", "exercise", "muscle_group", "set", "weight_lbs", "reps", "rpe", "bodyweight_exercise", "e1rm_lbs", "workout_id"]];
     index().ws.forEach(w => { const bwv = bwAvgAt(dn(w.date)); w.exercises.forEach(e => { const ex = getEx(e.exId); (e.sets || []).filter(s => validSet(s, ex)).forEach((s, i) => { const ew = (s.w || 0) + (ex.bw ? (bwv || 0) : 0); rows.push([w.date, ex.name, ex.group, i + 1, s.w == null ? "" : s.w, s.r, s.rpe == null ? "" : s.rpe, ex.bw ? "yes" : "no", (ew * (1 + s.r / 30)).toFixed(1), w.id]); }); }); });
     name = `overload-sets-${stamp}.csv`; data = rows.map(r => r.map(csvEsc).join(",")).join("\n");
   } else {
-    const rows = [["date", "weight_lbs", "avg_7day_lbs"]].concat(bwList().map(e => [e.date, e.w, bwAvgAt(e.n).toFixed(1)]));
-    name = `overload-bodyweight-${stamp}.csv`; data = rows.map(r => r.join(",")).join("\n");
+    const steps = Object.fromEntries(stepList().map(e => [e.date, e.steps]));
+    const dates = [...new Set(bwList().map(e => e.date).concat(Object.keys(steps)))].sort();
+    const rows = [["date", "weight_lbs", "avg_7day_lbs", "steps"]].concat(dates.map(d => { const b = S.bw[d]; return [d, b ? b.w : "", b ? bwAvgAt(dn(d)).toFixed(1) : "", steps[d] == null ? "" : steps[d]]; }));
+    name = `overload-body-${stamp}.csv`; data = rows.map(r => r.join(",")).join("\n");
   }
   const fallback = () => {
     const out = $("#exp-out"); if (!out) return;
@@ -1237,6 +1374,7 @@ function doImport() {
   const d = importBuf; if (!d) return;
   Object.values(d.workouts || {}).forEach(w => { if (w && w.id && w.date && Array.isArray(w.exercises)) { S.workouts[w.id] = w; writeOp("w:" + w.id, "set", w); } });
   Object.values(d.bw || {}).forEach(e => { if (e && e.date && e.w > 0) { S.bw[e.date] = { date: e.date, w: e.w }; writeOp("b:" + e.date, "set", S.bw[e.date]); } });
+  Object.values(d.steps || {}).forEach(e => { if (e && e.date && e.steps >= 0 && !S.steps[e.date]) { S.steps[e.date] = { date: e.date, steps: Math.round(e.steps) }; writeOp("s:" + e.date, "set", S.steps[e.date]); } });
   if (d.meta) {
     const m = normMeta(d.meta);
     m.custom.forEach(c => { if (!S.meta.custom.some(x => x.id === c.id)) S.meta.custom.push(c); });
@@ -1271,7 +1409,9 @@ function makeSample() {
     });
   }
   for (let n = start; n <= t; n++) { if (rnd() < 0.7) { B[ds(n)] = { date: ds(n), w: Math.round((178 + (n - start) * 0.035 + (rnd() - 0.5) * 2.4) * 10) / 10 }; } }
-  return { meta: { custom: [], ex: {} }, workouts: W, bw: B };
+  const ST = {};
+  for (let n = start; n <= t; n++) { const dow = new Date(n * 864e5).getUTCDay(); ST[ds(n)] = { date: ds(n), steps: Math.round((dow === 0 || dow === 6 ? 6500 : 9500) + (rnd() - 0.5) * 6000) }; }
+  return { meta: { custom: [], ex: {} }, workouts: W, bw: B, steps: ST };
 }
 
 /* ---------- Actions ---------- */
@@ -1489,6 +1629,16 @@ document.addEventListener("click", ev => {
     case "bw-cancel": ui.bwEdit = null; render(); return;
     case "bw-del": if (!armed(b, "Tap to delete")) return; delete S.bw[b.dataset.date]; writeOp("b:" + b.dataset.date, "del"); touch(); render(); return;
     case "open-settings": openSettings(b.dataset.focus); return;
+    case "open-health": openSettings(); setTimeout(() => { const c = $("#health-card"); if (c) c.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60); return;
+    case "health-key": makeHealthKey(b); return;
+    case "go-steps": ui.tab = "body"; saveUI(); render(); setTimeout(() => { const h = $("#steps-h"); if (h) h.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60); return;
+    case "copy-field": {
+      const inp = document.getElementById(b.dataset.for); if (!inp) return;
+      const ok = () => { b.textContent = "Copied"; setTimeout(() => { if (b.isConnected) b.textContent = "Copy"; }, 1600); };
+      const fallback = () => { inp.focus(); inp.select(); try { document.execCommand("copy"); ok(); } catch (e) { toast("Selected. Long-press to copy."); } };
+      try { navigator.clipboard.writeText(inp.value).then(ok, fallback); } catch (e) { fallback(); }
+      return;
+    }
     case "sb-out": supaSignOut(); return;
     case "theme-preview": window.OverloadSky.preview(); return;
     case "custom-del": {
