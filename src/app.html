@@ -224,11 +224,13 @@ body.resting main .col { padding-bottom: calc(170px + env(safe-area-inset-bottom
 .excat-h[aria-expanded="true"] .chev { transform: rotate(180deg); }
 .excat-b { padding: 0 16px 8px; border-top: 1px solid var(--line); }
 .excat-b .exset:last-child { border-bottom: 0; }
+.mheat, .mh-legend { --heat: var(--accent-fill); }
+:root.sun .mheat, :root.sun .mh-legend { --heat: var(--blue); }
 .mheat { width: 100%; max-width: 420px; height: auto; align-self: center; display: block; }
 .mheat .mh { cursor: pointer; transition: fill-opacity .2s; }
 .mh-lbl { font-family: var(--display); font-size: 13px; letter-spacing: .12em; fill: var(--muted); font-weight: 700; }
 .mh-legend { display: flex; align-items: center; gap: 8px; }
-.mh-legend i { flex: 1; height: 8px; border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 18%, transparent), var(--blue)); }
+.mh-legend i { flex: 1; height: 8px; border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--heat) 18%, transparent), var(--heat)); }
 .stttl { font-family: var(--display); font-size: 20px; letter-spacing: .03em; text-transform: uppercase; }
 .iconbtn[disabled] { opacity: .3; pointer-events: none; }
 .exset { display: grid; grid-template-columns: minmax(0,1fr) 64px 64px 64px; gap: 6px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -950,7 +952,7 @@ function muscleHeat() {
 function heatCard() {
   const H = muscleHeat();
   const mirror = 'transform="matrix(-1 0 0 1 200 0)"';
-  const fillFor = g => { const v = H.per[g] || 0; return v ? `fill="var(--blue)" fill-opacity="${(0.18 + 0.82 * v / H.max).toFixed(2)}"` : `fill="var(--line)"`; };
+  const fillFor = g => { const v = H.per[g] || 0; return v ? `fill="var(--heat)" fill-opacity="${(0.18 + 0.82 * v / H.max).toFixed(2)}"` : `fill="var(--line)"`; };
   const fig = (list, dx, label) => `<g transform="translate(${dx} 0)">
       <g fill="var(--raised)" stroke="var(--line)" stroke-width="1.2"><circle cx="100" cy="26" r="17"/><rect x="92" y="40" width="16" height="18" rx="4"/>
         ${BODY.base.map(d => `<path d="${d}"/><path d="${d}" ${mirror}/>`).join("")}</g>
