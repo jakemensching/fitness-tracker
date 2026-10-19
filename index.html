@@ -266,6 +266,8 @@ body.resting main .col { padding-bottom: calc(170px + env(safe-area-inset-bottom
 .excat-h[aria-expanded="true"] .chev { transform: rotate(180deg); }
 .excat-b { padding: 0 16px 8px; border-top: 1px solid var(--line); }
 .excat-b .exset:last-child { border-bottom: 0; }
+.stttl { font-family: var(--display); font-size: 20px; letter-spacing: .03em; text-transform: uppercase; }
+.iconbtn[disabled] { opacity: .3; pointer-events: none; }
 .exset { display: grid; grid-template-columns: minmax(0,1fr) 64px 64px 64px; gap: 6px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .exset .inp { min-height: 40px; font-size: 16px; padding: 0 6px; }
 .exset select.inp { font-size: 14px; text-align: left; }
@@ -477,12 +479,12 @@ const K = { cache: "overload.cache.v1", pending: "overload.pending.v1", ui: "ove
 let S = { meta: { custom: [], ex: {} }, workouts: {}, bw: {}, steps: {} };
 let REAL = null;            // real data stashed while sample mode is on
 let DEMO = false;
-const ui = Object.assign({ tab: "log", editing: null, progEx: null, range: "3m", bwRange: "3m", stRange: "4w", openMenu: null }, store.get(K.ui, {}));
+const ui = Object.assign({ tab: "log", editing: null, progEx: null, range: "3m", bwRange: "3m", stRange: "4w", stView: "week", stOff: 0, openMenu: null }, store.get(K.ui, {}));
 ui.openMenu = null;
 let pending = store.get(K.pending, []);
 let DB = null, BASE = null, offline = false, ver = 0;
 const dirtyW = new Set();
-const saveUI = () => store.set(K.ui, { tab: ui.tab, editing: ui.editing, progEx: ui.progEx, range: ui.range, bwRange: ui.bwRange, stRange: ui.stRange });
+const saveUI = () => store.set(K.ui, { tab: ui.tab, editing: ui.editing, progEx: ui.progEx, range: ui.range, bwRange: ui.bwRange, stRange: ui.stRange, stView: ui.stView });
 
 function loadCache() {
   const c = store.get(K.cache, null);
@@ -1073,6 +1075,39 @@ function bwStats() {
   const hasAgo = L[0].n <= t - 28;
   return { cur, start: L[0], sinceStart: cur - L[0].w, four: hasAgo && ago != null ? cur - ago : null, last: L[L.length - 1] };
 }
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// One period of step data for the Week / Month / Year switch. stOff steps back through earlier periods.
+function stepPeriod() {
+  const view = ["week", "month", "year"].includes(ui.stView) ? ui.stView : "week", off = Math.max(0, ui.stOff | 0);
+  const t = dn(today()), now = new Date(), first = (stepList()[0] || { n: t }).n;
+  const val = n => { const e = S.steps[ds(n)]; return e ? e.steps : null; };
+  let title, labels = [], vals = [], from, to, avgDays = [];
+  if (view === "week") {
+    from = weekStart(t) - 7 * off; to = from + 6;
+    for (let n = from; n <= to; n++) { labels.push(WDAYS[n - from]); vals.push(n > t ? null : val(n)); }
+    title = fmtDn(from) + " to " + fmtDn(to);
+  } else if (view === "month") {
+    const y = new Date(now.getFullYear(), now.getMonth() - off, 1);
+    from = dn(y.getFullYear() + "-" + pad(y.getMonth() + 1) + "-01");
+    const len = new Date(y.getFullYear(), y.getMonth() + 1, 0).getDate(); to = from + len - 1;
+    for (let n = from; n <= to; n++) { labels.push(String(n - from + 1)); vals.push(n > t ? null : val(n)); }
+    title = y.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  } else {
+    const y = now.getFullYear() - off;
+    from = dn(y + "-01-01"); to = dn(y + "-12-31");
+    const sum = Array(12).fill(0), cnt = Array(12).fill(0);
+    for (let n = from; n <= Math.min(to, t); n++) { const v = val(n); if (v != null) { const m = new Date(n * 864e5).getUTCMonth(); sum[m] += v; cnt[m]++; } }
+    labels = MONTHS.slice(); vals = sum.map((v, i) => cnt[i] ? Math.round(v / cnt[i]) : null);
+    title = String(y);
+  }
+  const days = []; for (let n = from; n <= Math.min(to, t); n++) { const v = val(n); if (v != null) days.push({ n, v }); }
+  const done = days.filter(d => d.n < t), total = days.reduce((a, d) => a + d.v, 0);
+  return { view, off, title, labels, vals, from, to, total, count: days.length,
+    avg: done.length ? done.reduce((a, d) => a + d.v, 0) / done.length : (days.length ? total / days.length : null),
+    best: days.length ? days.reduce((a, d) => d.v > a.v ? d : a) : null,
+    canPrev: from > first, canNext: off > 0 };
+}
 function renderSteps() {
   const sst = stepStats();
   let html = `<h2 id="steps-h" style="margin-top:8px">Steps</h2>`;
@@ -1088,24 +1123,26 @@ function renderSteps() {
     <div class="tile"><span class="lbl">7-day avg</span><div class="big-num">${sst.avg7 == null ? "–" : r0(sst.avg7)}</div>${ch || '<span class="small muted">Completed days</span>'}</div>
     <div class="tile"><span class="lbl">Best day</span><div class="big-num">${r0(Math.max.apply(null, stepList().map(e => e.steps)))}</div><span class="small muted">${fmtD(stepList().reduce((a, e) => e.steps > a.steps ? e : a).date)}</span></div>
   </div>
-  <div class="card"><div class="row between"><h3>Daily steps</h3><span class="small muted">Bars: days · Line: 7-day avg</span></div>${rangeChips("stRange")}<div class="chartbox"><canvas id="c-steps"></canvas></div>
-    <span class="small muted">${sst.last.at ? "Last update from Apple Health " + fmtAt(sst.last.at) + "." : ""}</span></div>`;
+  ${stepsCard()}`;
   return html;
+}
+function stepsCard() {
+  const P = stepPeriod(), sst = stepStats(), unit = P.view === "year" ? "avg per day" : "avg per day";
+  const nav = `<div class="row between" style="align-items:center"><button class="iconbtn" data-act="st-nav" data-d="1" aria-label="Earlier" ${P.canPrev ? "" : "disabled"}>${"&#8249;"}</button><b class="stttl">${esc(P.title)}</b><button class="iconbtn" data-act="st-nav" data-d="-1" aria-label="Later" ${P.canNext ? "" : "disabled"}>${"&#8250;"}</button></div>`;
+  const seg = `<div class="chips" role="group" aria-label="Steps view">${[["week", "Week"], ["month", "Month"], ["year", "Year"]].map(([k, l]) => `<button class="chip" data-act="st-view" data-v="${k}" aria-pressed="${P.view === k}">${l}</button>`).join("")}</div>`;
+  const sum = P.count ? `<div class="row" style="gap:18px"><span class="small"><b>${r0(P.avg)}</b> <span class="muted">${unit}</span></span><span class="small"><b>${r0(P.total)}</b> <span class="muted">total</span></span>${P.best ? `<span class="small"><b>${r0(P.best.v)}</b> <span class="muted">best · ${fmtDn(P.best.n)}</span></span>` : ""}</div>` : `<span class="small muted">No steps recorded in this period.</span>`;
+  return `<div class="card"><h3>Steps over time</h3>${seg}${nav}${sum}<div class="chartbox"><canvas id="c-steps"></canvas></div>
+    <span class="small muted">${P.view === "year" ? "Each bar is that month's average per day." : "Each bar is one day."} Averages leave out today until it's done.${sst.last.at ? " Last update from Apple Health " + fmtAt(sst.last.at) + "." : ""}</span></div>`;
 }
 function drawSteps() {
   if (typeof Chart === "undefined" || !$("#c-steps")) return;
-  const lo = rangeStart(ui.stRange), t = dn(today());
-  const first = Math.max(isFinite(lo) ? lo : (stepList()[0] || { n: t }).n, (stepList()[0] || { n: t }).n);
-  const days = []; for (let n = first; n <= t; n++) days.push(n);
-  const val = n => { const e = S.steps[ds(n)]; return e ? e.steps : null; };
-  const o = baseOpts();
-  o.scales.x.grid.display = false; o.scales.x.ticks.maxTicksLimit = 6; o.scales.x.ticks.autoSkip = true; o.scales.x.ticks.maxRotation = 0;
+  const P = stepPeriod(), t = dn(today()), o = baseOpts();
+  o.scales.x.grid.display = false; o.scales.x.ticks.maxRotation = 0; o.scales.x.ticks.autoSkip = true; o.scales.x.ticks.maxTicksLimit = P.view === "month" ? 8 : 12;
   o.scales.y.beginAtZero = true;
-  o.plugins.tooltip.callbacks = { label: it => it.datasetIndex ? ` 7-day avg ${r0(it.parsed.y)}` : ` ${r0(it.parsed.y)} steps` };
-  charts.push(new Chart($("#c-steps"), { type: "bar", data: { labels: days.map(fmtDn), datasets: [
-    { type: "bar", data: days.map(val), backgroundColor: css("--blue"), borderRadius: 3, maxBarThickness: 18, order: 2 },
-    { type: "line", data: days.map(n => { const a = stepAvg(n === t ? t - 1 : n, 7); return a == null ? null : Math.round(a); }), borderColor: css("--accent-fill"), borderWidth: 2.5, pointRadius: 0, tension: 0.3, spanGaps: true, order: 1 }
-  ] }, options: o }));
+  const todayIdx = P.view !== "year" && t >= P.from && t <= P.to ? t - P.from : -1;
+  const fill = P.labels.map((_, i) => i === todayIdx ? css("--accent-fill") : css("--blue"));
+  o.plugins.tooltip.callbacks = { label: it => ` ${r0(it.parsed.y)} steps${P.view === "year" ? " per day" : ""}` };
+  charts.push(new Chart($("#c-steps"), { type: "bar", data: { labels: P.labels, datasets: [{ data: P.vals, backgroundColor: fill, borderRadius: 4, maxBarThickness: P.view === "month" ? 14 : 32 }] }, options: o }));
 }
 function renderBody() {
   const st = bwStats(), L = bwList();
@@ -1651,6 +1688,8 @@ document.addEventListener("click", ev => {
       setTimeout(() => { const el = document.getElementById("set-" + id); if (el) { el.scrollIntoView({ block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600); } }, 60); return; }
     case "open-health": openSettings(); setTimeout(() => { const c = $("#health-card"); if (c) c.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60); return;
     case "health-key": makeHealthKey(b); return;
+    case "st-view": ui.stView = b.dataset.v; ui.stOff = 0; saveUI(); render(); return;
+    case "st-nav": { const next = (ui.stOff | 0) + (+b.dataset.d); if (next < 0) return; ui.stOff = next; render(); return; }
     case "go-steps": ui.tab = "body"; saveUI(); render(); setTimeout(() => { const h = $("#steps-h"); if (h) h.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60); return;
     case "copy-field": {
       const inp = document.getElementById(b.dataset.for); if (!inp) return;
