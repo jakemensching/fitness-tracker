@@ -27,7 +27,7 @@ A personal, mobile-first workout tracker built around progressive overload and b
 | --- | --- |
 | Log | Week strip, streak, quick body weight entry, current session |
 | History | Every session with sets, volume, PRs, edit and delete |
-| Progress | e1RM over time, volume per session, weekly sets per muscle group (4w / 3m / 6m / all) |
+| Progress | Muscle heat map (front and back body, darker blue = more sets per week), e1RM over time, volume per session, weekly sets per muscle group (4w / 3m / 6m / all) |
 | Body | Weigh-ins as dots with a 7-day average line, change since start and over 4 weeks |
 | Stats | Workouts this week, streak, PRs with dates, next targets, relative strength |
 | Exercises | One collapsible section per muscle category. Open one to set each lift's muscle group, sets and rep range |

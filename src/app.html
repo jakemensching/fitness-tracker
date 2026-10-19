@@ -224,6 +224,11 @@ body.resting main .col { padding-bottom: calc(170px + env(safe-area-inset-bottom
 .excat-h[aria-expanded="true"] .chev { transform: rotate(180deg); }
 .excat-b { padding: 0 16px 8px; border-top: 1px solid var(--line); }
 .excat-b .exset:last-child { border-bottom: 0; }
+.mheat { width: 100%; max-width: 420px; height: auto; align-self: center; display: block; }
+.mheat .mh { cursor: pointer; transition: fill-opacity .2s; }
+.mh-lbl { font-family: var(--display); font-size: 13px; letter-spacing: .12em; fill: var(--muted); font-weight: 700; }
+.mh-legend { display: flex; align-items: center; gap: 8px; }
+.mh-legend i { flex: 1; height: 8px; border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 18%, transparent), var(--blue)); }
 .stttl { font-family: var(--display); font-size: 20px; letter-spacing: .03em; text-transform: uppercase; }
 .iconbtn[disabled] { opacity: .3; pointer-events: none; }
 .exset { display: grid; grid-template-columns: minmax(0,1fr) 64px 64px 64px; gap: 6px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -911,6 +916,56 @@ function loggedEx() {
   const lastN = id => idx.byEx[id][idx.byEx[id].length - 1].n;
   return ids.sort((a, b) => lastN(b) - lastN(a));
 }
+/* Muscle heat map: darker blue = more hard sets per week in the selected range */
+const BODY = {
+  base: ["M100 56 L76 58 C64 60 58 64 56 70 L58 110 C62 140 68 170 70 196 L100 198 Z",
+    "M58 64 C46 66 40 78 40 94 C40 120 42 150 38 190 C37 200 40 210 44 212 C50 212 52 206 52 198 C56 170 62 140 66 112 L66 70 Z",
+    "M70 192 C64 226 64 262 70 292 C68 322 68 352 72 384 L70 402 L92 404 L90 384 C92 352 92 320 90 292 C96 262 98 228 100 198 Z"],
+  front: [["Shoulders", "M58 64 C46 66 40 78 41 94 C47 100 55 100 60 94 C64 84 68 74 70 64 C66 62 62 62 58 64 Z"],
+    ["Upper Chest", "M72 64 C82 62 92 62 99 64 L99 80 C89 80 79 81 70 82 C68 75 69 69 72 64 Z"],
+    ["Chest", "M70 85 C80 84 90 84 99 84 L99 106 C88 112 76 108 70 98 C68 94 68 89 70 85 Z"],
+    ["Biceps", "M42 100 C48 104 56 104 61 99 C62 112 60 128 56 138 C50 140 45 136 43 128 C42 120 41 110 42 100 Z"],
+    ["Core", "M84 114 C94 112 106 112 116 114 L114 168 C108 176 92 176 86 168 Z", true],
+    ["Abductors", "M71 186 C64 200 63 220 66 238 C70 226 73 210 77 194 Z"],
+    ["Quads", "M76 198 C70 226 70 256 74 282 C80 288 86 286 89 280 C91 256 91 226 89 200 C85 198 80 197 76 198 Z"],
+    ["Adductors", "M90 202 C92 228 92 256 90 280 C94 274 97 262 98 250 L99 204 Z"],
+    ["Calves", "M72 300 C69 324 70 348 74 368 C80 372 86 370 88 364 C90 340 90 318 88 300 C83 296 77 296 72 300 Z"]],
+  back: [["Back", "M76 62 C90 58 110 58 124 62 C134 66 138 76 138 96 C134 126 124 150 114 162 L86 162 C76 150 66 126 62 96 C62 76 66 66 76 62 Z", true],
+    ["Shoulders", "M58 64 C46 66 40 78 41 94 C47 100 55 100 60 94 C64 84 68 74 70 64 C66 62 62 62 58 64 Z"],
+    ["Triceps", "M42 100 C48 104 56 104 61 99 C62 112 60 128 56 138 C50 140 45 136 43 128 C42 120 41 110 42 100 Z"],
+    ["Abductors", "M72 184 C80 176 92 176 99 180 L99 210 C88 214 76 210 70 202 C69 194 70 188 72 184 Z"],
+    ["Hamstrings", "M74 214 C70 240 72 264 76 284 C82 290 90 288 93 280 C96 258 97 236 98 216 C90 218 82 217 74 214 Z"],
+    ["Calves", "M72 296 C67 316 68 336 74 356 C80 362 87 360 89 350 C92 332 92 314 89 296 C83 292 77 292 72 296 Z"]]
+};
+function muscleHeat() {
+  const idx = index(), t = dn(today()), lo = rangeStart(ui.range);
+  const first = idx.active.length ? dn(idx.active[0].date) : t, start = Math.max(isFinite(lo) ? lo : first, first);
+  const weeks = Math.max(1, (t - start + 1) / 7), sets = {};
+  GROUPS.forEach(g => { sets[g] = 0; });
+  idx.active.forEach(w => { const n = dn(w.date); if (n < start || n > t) return;
+    w.exercises.forEach(e => { const ex = getEx(e.exId), c = (e.sets || []).filter(s => validSet(s, ex)).length; if (c) sets[ex.group] = (sets[ex.group] || 0) + c; }); });
+  const per = {}; GROUPS.forEach(g => { per[g] = Math.round(sets[g] / weeks * 10) / 10; });
+  return { per, max: Math.max(1, ...GROUPS.map(g => per[g])), weeks };
+}
+function heatCard() {
+  const H = muscleHeat();
+  const mirror = 'transform="matrix(-1 0 0 1 200 0)"';
+  const fillFor = g => { const v = H.per[g] || 0; return v ? `fill="var(--blue)" fill-opacity="${(0.18 + 0.82 * v / H.max).toFixed(2)}"` : `fill="var(--line)"`; };
+  const fig = (list, dx, label) => `<g transform="translate(${dx} 0)">
+      <g fill="var(--raised)" stroke="var(--line)" stroke-width="1.2"><circle cx="100" cy="26" r="17"/><rect x="92" y="40" width="16" height="18" rx="4"/>
+        ${BODY.base.map(d => `<path d="${d}"/><path d="${d}" ${mirror}/>`).join("")}</g>
+      ${list.map(([g, d, solo]) => `<g class="mh" data-act="mh" data-g="${g}" ${fillFor(g)} stroke="var(--surface)" stroke-width="1"><title>${g}: ${H.per[g] || 0} sets/week</title><path d="${d}"/>${solo ? "" : `<path d="${d}" ${mirror}/>`}</g>`).join("")}
+      <text x="100" y="418" text-anchor="middle" class="mh-lbl">${label}</text></g>`;
+  const ranked = GROUPS.slice().sort((a, b) => H.per[b] - H.per[a]);
+  const top = ranked.filter(g => H.per[g] > 0).slice(0, 3), low = ranked.slice().reverse().slice(0, 3);
+  const fmt = g => `${esc(g)} <b>${H.per[g]}</b>`;
+  return `<div class="card"><div class="row between"><h3>Muscle heat map</h3><span class="small muted">Sets per week</span></div>
+    <svg class="mheat" viewBox="0 0 400 426" role="img" aria-label="Body heat map of sets per week by muscle">${fig(BODY.front, 0, "FRONT")}${fig(BODY.back, 200, "BACK")}</svg>
+    <div class="mh-legend"><span class="small muted">Less</span><i></i><span class="small muted">More</span></div>
+    ${top.length ? `<span class="small">Most hit: ${top.map(fmt).join(" · ")}</span>` : ""}
+    <span class="small">Least hit: ${low.map(fmt).join(" · ")}</span>
+    <span class="small muted">Average hard sets per week in the range above. Gray means none. Tap a muscle for its number.</span></div>`;
+}
 function renderProgress() {
   const ids = loggedEx();
   if (!ids.length) return `<h2>Progress</h2>` + sampleCTA();
@@ -924,6 +979,7 @@ function renderProgress() {
   }
   const opts = ids.map(id => `<option value="${esc(id)}" ${id === ui.progEx ? "selected" : ""}>${esc(getEx(id).name)}</option>`).join("");
   return `<h2>Progress</h2>${rangeChips("range")}
+    ${heatCard()}
     <select class="inp left" id="prog-ex" aria-label="Exercise">${opts}</select>
     <div class="card"><div class="row between"><h3>Estimated 1RM</h3>${e1Head}</div>
       ${ss.length ? `<div class="chartbox"><canvas id="c-e1"></canvas></div>` : `<div class="muted small">No ${esc(ex.name)} sessions in this range.</div>`}
@@ -1653,6 +1709,7 @@ document.addEventListener("click", ev => {
       setTimeout(() => { const el = document.getElementById("set-" + id); if (el) { el.scrollIntoView({ block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600); } }, 60); return; }
     case "open-health": openSettings(); setTimeout(() => { const c = $("#health-card"); if (c) c.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60); return;
     case "health-key": makeHealthKey(b); return;
+    case "mh": { const H = muscleHeat(), g = b.dataset.g; toast(`${g}: ${H.per[g] || 0} sets per week`); return; }
     case "st-type": ui.stType = b.dataset.v; saveUI(); render(); return;
     case "st-view": ui.stView = b.dataset.v; ui.stOff = 0; saveUI(); render(); return;
     case "st-nav": { const next = (ui.stOff | 0) + (+b.dataset.d); if (next < 0) return; ui.stOff = next; render(); return; }
