@@ -9,6 +9,7 @@ A personal, mobile-first workout tracker built around progressive overload and b
 - **PR badge** shows the moment a set beats your previous best weight or e1RM.
 - **Body weight** logging with a 7-day moving average.
 - **Edit or delete** any session or weigh-in.
+- **Supplements**: a daily checklist on the Log tab (Creatine by default, add your own) with a 7-day strip and streak. An optional 11 PM iPhone Shortcut checks Supabase and sends a "Take your creatine" notification if it's unchecked (`supabase/supps.sql`).
 - **Steps from Apple Health**: an iPhone Shortcut sends each day's step count. Steps show on the Log tab and in a Steps section on the Body tab (today, 7-day average of completed days, week-over-week change, daily chart).
 
 ### Calculations
@@ -92,6 +93,7 @@ On iPhone, the installed app has its own storage, separate from Safari. Data onl
 | `index.html` | Built output, `head.html` + `src/app.html`. Run `./build.sh` after editing either |
 | `manifest.json` | App name, icons, standalone display, colors |
 | `supabase/schema.sql` | Table and row level security for Supabase sync |
+| `supabase/supps.sql` | Creatine reminder: `overload_supp_status` for the 11 PM Shortcut |
 | `supabase/steps.sql` | Apple Health steps: Shortcut key table and the `overload_log_steps` function |
 | `sw.js` | Service worker: offline app shell, network-first page loads so updates arrive on next open |
 | `icons/`, `favicon.svg`, `apple-touch-icon.png` | Plate stack icons |

@@ -304,6 +304,17 @@ header.top .spacer { flex-shrink: 1; min-width: 0; }
   .grid3 { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 /* Steps */
+.supp { display: flex; flex-direction: column; gap: 8px; }
+.supp + .supp { border-top: 1px solid var(--line); padding-top: 12px; }
+.suppchk { display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: 0; padding: 0; text-align: left; color: inherit; font: inherit; }
+.suppchk .grow { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.suppchk .grow b { font-size: 18px; }
+.suppchk .box { width: 34px; height: 34px; flex: none; border-radius: 10px; border: 2px solid var(--line); display: grid; place-items: center; font-size: 20px; font-weight: 800; color: var(--accent-ink); background: var(--raised); transition: background .15s, border-color .15s; }
+.suppchk[aria-pressed="true"] .box { background: var(--good); border-color: var(--good); color: #fff; }
+.suppdots { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.suppdots i { height: 8px; border-radius: 4px; background: var(--raised); border: 1px solid var(--line); }
+.suppdots i.on { background: var(--good); border-color: var(--good); }
+.suppdots i.today { outline: 2px solid var(--muted); outline-offset: 1px; }
 .stepline { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; width: 100%; cursor: pointer; }
 .stepline > div { display: flex; flex-direction: column; gap: 4px; }
 .stepline .right { align-items: flex-end; line-height: 1.5; }
@@ -483,7 +494,7 @@ const store = {
 
 /* ---------- State ---------- */
 const K = { cache: "overload.cache.v1", pending: "overload.pending.v1", ui: "overload.ui.v1" };
-let S = { meta: { custom: [], ex: {} }, workouts: {}, bw: {}, steps: {} };
+let S = { meta: { custom: [], ex: {}, supps: null }, workouts: {}, bw: {}, steps: {}, supps: {} };
 let REAL = null;            // real data stashed while sample mode is on
 let DEMO = false;
 const ui = Object.assign({ tab: "log", editing: null, progEx: null, range: "3m", bwRange: "3m", stRange: "4w", stView: "week", stType: "line", stOff: 0, openMenu: null }, store.get(K.ui, {}));
@@ -495,11 +506,11 @@ const saveUI = () => store.set(K.ui, { tab: ui.tab, editing: ui.editing, progEx:
 
 function loadCache() {
   const c = store.get(K.cache, null);
-  if (c) S = { meta: normMeta(c.meta), workouts: c.workouts || {}, bw: c.bw || {}, steps: c.steps || {} };
+  if (c) S = { meta: normMeta(c.meta), workouts: c.workouts || {}, bw: c.bw || {}, steps: c.steps || {}, supps: c.supps || {} };
   applyPending();
 }
 function saveCache() { if (!DEMO) store.set(K.cache, S); }
-function normMeta(m) { m = m || {}; return { custom: Array.isArray(m.custom) ? m.custom : [], ex: m.ex && typeof m.ex === "object" ? m.ex : {} }; }
+function normMeta(m) { m = m || {}; return { custom: Array.isArray(m.custom) ? m.custom : [], ex: m.ex && typeof m.ex === "object" ? m.ex : {}, supps: Array.isArray(m.supps) ? m.supps : null }; }
 function touch() { ver++; }
 
 /* ---------- Persistence: local first, then sync ---------- */
@@ -517,14 +528,14 @@ function applyPending() {
   for (const p of pending) {
     if (p.k === "meta") { if (p.data) S.meta = normMeta(clone(p.data)); continue; }
     const [t, id] = [p.k[0], p.k.slice(2)];
-    const bag = t === "w" ? S.workouts : t === "s" ? S.steps : S.bw;
+    const bag = t === "w" ? S.workouts : t === "s" ? S.steps : t === "p" ? (S.supps = S.supps || {}) : S.bw;
     if (p.op === "del") delete bag[id]; else bag[id] = clone(p.data);
   }
 }
 function refFor(k) {
   const m = DB.doc(BASE);
   if (k === "meta") return m;
-  return m.collection(k[0] === "w" ? "workouts" : k[0] === "s" ? "steps" : "bw").doc(k.slice(2));
+  return m.collection(k[0] === "w" ? "workouts" : k[0] === "s" ? "steps" : k[0] === "p" ? "supps" : "bw").doc(k.slice(2));
 }
 let flushing = false;
 async function flush() {
@@ -611,7 +622,7 @@ function supaAdapter(sb, userId) {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
   window.addEventListener("online", refresh);
   const coll = name => {
-    const pre = name === "workouts" ? "w" : name === "steps" ? "s" : "b";
+    const pre = name === "workouts" ? "w" : name === "steps" ? "s" : name === "supps" ? "p" : "b";
     return {
       doc: id => ref(pre + ":" + id),
       onSnapshot(cb, onErr) { watch(pre, r => cb({ docs: r.map(x => ({ id: x.k.slice(2), data: () => x.data })) }), onErr); }
@@ -637,7 +648,7 @@ async function supaBootstrap(adapter, userId) {
   Object.values(S.bw).forEach(b => { const k = "b:" + b.date; if (!have.has(k) && !queued.has(k)) pending.push({ k, op: "set", data: clone(b) }); });
   // Meta: merge so an empty phone never wipes your rep ranges and custom lifts.
   const remote = normMeta(m[0] && m[0].data), local = normMeta(S.meta);
-  const merged = { custom: remote.custom.slice(), ex: Object.assign({}, remote.ex, local.ex) };
+  const merged = { custom: remote.custom.slice(), ex: Object.assign({}, remote.ex, local.ex), supps: remote.supps || local.supps };
   local.custom.forEach(c => { if (!merged.custom.some(x => x.id === c.id)) merged.custom.push(c); });
   pending = pending.filter(p => p.k !== "meta");
   if (merged.custom.length || Object.keys(merged.ex).length) pending.push({ k: "meta", op: "set", data: merged });
@@ -708,6 +719,12 @@ function attachSnapshots() {
     const next = {};
     q.docs.forEach(d => { const v = d.data(); if (v && v.date) next[d.id] = clone(v); });
     S.steps = next; applyPending(); touch(); saveCache(); requestRender(true);
+  }, () => {});
+  m.collection("supps").onSnapshot(q => {
+    if (DEMO) return;
+    const next = {};
+    q.docs.forEach(d => { const v = d.data(); if (v && v.date) next[d.id] = clone(v); });
+    S.supps = next; applyPending(); touch(); saveCache(); requestRender(true);
   }, () => {});
   flush(); syncPill();
 }
@@ -838,6 +855,28 @@ function sampleCTA() {
 }
 
 /* Log tab */
+/* Supplements: a daily checklist. Creatine is there by default. */
+const suppList = () => (S.meta && Array.isArray(S.meta.supps) ? S.meta.supps : [{ id: "creatine", name: "Creatine" }]);
+const suppTaken = (d, id) => !!(((S.supps || {})[d] || {}).taken || {})[id];
+function suppStreak(id) {
+  let n = dn(today()), c = 0;
+  if (!suppTaken(today(), id)) n--; // today isn't over, so an unchecked today doesn't break it
+  while (suppTaken(ds(n), id)) { c++; n--; }
+  return c;
+}
+function suppCard() {
+  const L = suppList(), t = dn(today());
+  const rows = L.map(sp => {
+    const on = suppTaken(today(), sp.id), st = suppStreak(sp.id);
+    const dots = Array.from({ length: 7 }, (_, i) => t - 6 + i).map(n => `<i class="${suppTaken(ds(n), sp.id) ? "on" : ""} ${n === t ? "today" : ""}" title="${fmtDn(n)}"></i>`).join("");
+    return `<div class="supp"><button class="suppchk" data-act="supp-tog" data-id="${esc(sp.id)}" aria-pressed="${on}"><span class="box">${on ? "✓" : ""}</span><span class="grow"><b>${esc(sp.name)}</b><span class="small muted">${on ? "Taken today" : "Not yet today"}${st ? " · " + st + " day streak" : ""}</span></span></button>
+      <div class="suppdots" aria-label="Last 7 days">${dots}</div>
+      ${ui.suppEdit ? `<button class="btn sm danger" data-act="supp-del" data-id="${esc(sp.id)}">Remove</button>` : ""}</div>`;
+  }).join("");
+  return `<div class="card"><div class="row between"><span class="lbl">Supplements</span><button class="btn sm ghost" data-act="supp-edit">${ui.suppEdit ? "Done" : "Edit"}</button></div>
+    ${rows || '<span class="small muted">No supplements yet. Tap Edit to add one.</span>'}
+    ${ui.suppEdit ? `<form class="row" data-form="supp-add" style="flex-wrap:nowrap"><input class="inp left" id="supp-name" placeholder="e.g. Fish oil" autocomplete="off" aria-label="Supplement name"><button class="btn primary" type="submit" style="flex:none">Add</button></form>` : ""}</div>`;
+}
 function renderLog() {
   const t = dn(today()), wk = weekStart(t), idx = index();
   const trained = new Set(idx.active.filter(w => weekStart(dn(w.date)) === wk).map(w => dn(w.date)));
@@ -861,6 +900,7 @@ function renderLog() {
   if (sst) html += `<button class="card stepline" data-act="go-steps" style="text-align:left;font:inherit;color:inherit">
     <div class="grow"><span class="lbl">Steps today</span><div class="big-num">${sst.today == null ? "–" : r0(sst.today)}</div></div>
     <div class="right small muted"><span>7-day avg <b class="up">${sst.avg7 == null ? "–" : r0(sst.avg7)}</b></span>${sst.last.at ? "<span>Health · " + fmtAt(sst.last.at) + "</span>" : ""}</div></button>`;
+  html += suppCard();
   const w = ui.editing && S.workouts[ui.editing];
   if (!w) {
     ui.editing = null;
@@ -1357,6 +1397,14 @@ function openSettings() {
       <label class="btn sm" style="align-self:flex-start">Import JSON backup<input type="file" id="imp" accept=".json,application/json" hidden></label>
       <div id="imp-msg"></div><div id="exp-out"></div></div>
     ${SUPA_CFG ? '<div class="card" style="background:var(--raised)" id="health-card"></div>' : ""}
+    ${SUPA_CFG ? `<div class="card" style="background:var(--raised)"><span class="lbl">Creatine reminder</span>
+      <span class="small">An 11 PM Shortcut checks if Creatine is ticked today and sends a notification if it isn't. It uses the same key as your steps Shortcut.</span>
+      <div class="field"><label class="lbl" for="supp-url">Reminder URL</label><div class="copyrow"><input class="inp" id="supp-url" readonly value="${esc(SUPA_CFG.url.replace(/\/$/, "") + "/rest/v1/rpc/overload_supp_status")}"><button class="btn sm" data-act="copy-field" data-for="supp-url">Copy</button></div></div>
+      <ol class="guide"><li>Run <code>supabase/supps.sql</code> once in the Supabase SQL Editor.</li>
+        <li>In Shortcuts, long-press <b>Overload Steps</b> → <b>Duplicate</b>. Rename it <b>Creatine Check</b>.</li>
+        <li>Delete the two Health actions. In Get Contents of URL, paste the Reminder URL and remove the <code>p_steps</code> field.</li>
+        <li>Add <b>Get Dictionary Value</b> for key <code>remind</code>, then <b>If</b> Dictionary Value <b>is</b> <code>yes</code> → <b>Show Notification</b> "Take your creatine".</li>
+        <li>Automation → Time of Day <b>11:00 PM</b>, Daily, Run Immediately → Run Shortcut <b>Creatine Check</b>.</li></ol></div>` : ""}
     <div class="card" style="background:var(--raised)" id="sky-card"></div>
   </div>`);
   refreshSky(); refreshHealth();
@@ -1452,7 +1500,7 @@ function csvEsc(v) { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '
 function exportData(kind) {
   const stamp = today();
   let name, data;
-  if (kind === "json") { name = `overload-backup-${stamp}.json`; data = JSON.stringify({ app: "overload", version: 1, exported: new Date().toISOString(), meta: S.meta, workouts: S.workouts, bw: S.bw, steps: S.steps }, null, 2); }
+  if (kind === "json") { name = `overload-backup-${stamp}.json`; data = JSON.stringify({ app: "overload", version: 1, exported: new Date().toISOString(), meta: S.meta, workouts: S.workouts, bw: S.bw, steps: S.steps, supps: S.supps }, null, 2); }
   else if (kind === "csv") {
     const rows = [["date", "exercise", "muscle_group", "set", "weight_lbs", "reps", "rpe", "bodyweight_exercise", "e1rm_lbs", "workout_id"]];
     index().ws.forEach(w => { const bwv = bwAvgAt(dn(w.date)); w.exercises.forEach(e => { const ex = getEx(e.exId); (e.sets || []).filter(s => validSet(s, ex)).forEach((s, i) => { const ew = (s.w || 0) + (ex.bw ? (bwv || 0) : 0); rows.push([w.date, ex.name, ex.group, i + 1, s.w == null ? "" : s.w, s.r, s.rpe == null ? "" : s.rpe, ex.bw ? "yes" : "no", (ew * (1 + s.r / 30)).toFixed(1), w.id]); }); }); });
@@ -1494,8 +1542,10 @@ function doImport() {
   Object.values(d.workouts || {}).forEach(w => { if (w && w.id && w.date && Array.isArray(w.exercises)) { S.workouts[w.id] = w; writeOp("w:" + w.id, "set", w); } });
   Object.values(d.bw || {}).forEach(e => { if (e && e.date && e.w > 0) { S.bw[e.date] = { date: e.date, w: e.w }; writeOp("b:" + e.date, "set", S.bw[e.date]); } });
   Object.values(d.steps || {}).forEach(e => { if (e && e.date && e.steps >= 0 && !S.steps[e.date]) { S.steps[e.date] = { date: e.date, steps: Math.round(e.steps) }; writeOp("s:" + e.date, "set", S.steps[e.date]); } });
+  Object.values(d.supps || {}).forEach(e => { if (e && e.date && e.taken && !(S.supps || {})[e.date]) { S.supps[e.date] = { date: e.date, taken: Object.assign({}, e.taken) }; writeOp("p:" + e.date, "set", S.supps[e.date]); } });
   if (d.meta) {
     const m = normMeta(d.meta);
+    if (m.supps && !S.meta.supps) S.meta.supps = m.supps;
     m.custom.forEach(c => { if (!S.meta.custom.some(x => x.id === c.id)) S.meta.custom.push(c); });
     S.meta.ex = Object.assign({}, m.ex, S.meta.ex);
     writeOp("meta", "set", S.meta);
@@ -1530,7 +1580,8 @@ function makeSample() {
   for (let n = start; n <= t; n++) { if (rnd() < 0.7) { B[ds(n)] = { date: ds(n), w: Math.round((178 + (n - start) * 0.035 + (rnd() - 0.5) * 2.4) * 10) / 10 }; } }
   const ST = {};
   for (let n = start; n <= t; n++) { const dow = new Date(n * 864e5).getUTCDay(); ST[ds(n)] = { date: ds(n), steps: Math.round((dow === 0 || dow === 6 ? 6500 : 9500) + (rnd() - 0.5) * 6000) }; }
-  return { meta: { custom: [], ex: {} }, workouts: W, bw: B, steps: ST };
+  const SP = {}; for (let n = t - 30; n <= t - 1; n++) if (rnd() > 0.15) SP[ds(n)] = { date: ds(n), taken: { creatine: true } };
+  return { meta: { custom: [], ex: {}, supps: null }, workouts: W, bw: B, steps: ST, supps: SP };
 }
 
 /* ---------- Actions ---------- */
@@ -1754,6 +1805,17 @@ document.addEventListener("click", ev => {
     case "open-health": openSettings(); setTimeout(() => { const c = $("#health-card"); if (c) c.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60); return;
     case "health-key": makeHealthKey(b); return;
     case "mh": { const H = muscleHeat(), g = b.dataset.g; toast(`${g}: ${H.per[g] || 0} sets per week`); return; }
+    case "supp-tog": {
+      if (DEMO) { toast("Sample mode: nothing is saved."); return; }
+      const d = today(), e = Object.assign({ date: d }, (S.supps || {})[d]); e.taken = Object.assign({}, e.taken);
+      if (e.taken[b.dataset.id]) delete e.taken[b.dataset.id]; else e.taken[b.dataset.id] = true;
+      S.supps = S.supps || {}; S.supps[d] = e; writeOp("p:" + d, "set", e); touch(); render(); return;
+    }
+    case "supp-edit": ui.suppEdit = !ui.suppEdit; render(); if (ui.suppEdit) { const i = $("#supp-name"); if (i) i.focus(); } return;
+    case "supp-del": {
+      if (!armed(b, "Tap to remove")) return;
+      S.meta.supps = suppList().filter(x => x.id !== b.dataset.id); writeOp("meta", "set", S.meta); touch(); render(); return;
+    }
     case "st-type": ui.stType = b.dataset.v; saveUI(); render(); return;
     case "st-view": ui.stView = b.dataset.v; ui.stOff = 0; saveUI(); render(); return;
     case "st-nav": { const next = (ui.stOff | 0) + (+b.dataset.d); if (next < 0) return; ui.stOff = next; render(); return; }
@@ -1836,6 +1898,13 @@ document.addEventListener("keydown", ev => {
 document.addEventListener("submit", ev => {
   ev.preventDefault();
   const f = ev.target.dataset.form;
+  if (f === "supp-add") {
+    const name = ($("#supp-name").value || "").trim().slice(0, 40); if (!name) return;
+    if (DEMO) { toast("Sample mode: nothing is saved."); return; }
+    let id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uid("s");
+    if (suppList().some(x => x.id === id)) { toast(name + " is already on the list."); return; }
+    S.meta.supps = suppList().concat([{ id, name }]); writeOp("meta", "set", S.meta); touch(); render(); return;
+  }
   if (f === "bwq" || f === "bw") {
     const wv = num($(f === "bwq" ? "#bwq-w" : "#bw-w").value), d = f === "bwq" ? today() : $("#bw-d").value;
     if (!wv || wv < 50 || wv > 700 || !d) { toast("Enter your weight in lbs, like 182.4"); return; }
