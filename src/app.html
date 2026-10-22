@@ -1260,7 +1260,7 @@ function renderStats() {
     <div class="tile"><span class="lbl">Since start</span><div class="big-num">${signed(b.sinceStart)}</div></div>
     <div class="tile"><span class="lbl">Last 4 wks</span><div class="big-num">${b.four == null ? "–" : signed(b.four)}</div></div></div>`;
   const best = id => { const l = idx.byEx[id] || []; let e = null, w = null; l.forEach(s => { if (!e || s.e1 > e.e1) e = s; if (!w || s.maxW > w.maxW) w = s; }); return { e, w }; };
-  const big4 = BIG4.filter(([id]) => !RETIRED.has(id) || idx.byEx[id]);
+  const big4 = BIG4.filter(([id]) => !RETIRED.has(id));
   html += `<div class="card"><div class="row between"><h3>Relative strength</h3><span class="small muted">Best e1RM ÷ ${bw ? r1(bw) + " lbs" : "body weight"}</span></div><div class="${big4.length === 3 ? "grid3" : "grid2"}">${big4.map(([id, l]) => {
     const B = best(id).e;
     const v = B && bw ? (B.e1 / bw) : null;
