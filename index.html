@@ -466,7 +466,7 @@ const BUILTIN = [
   ["hip-thrust", "Hip Thrust", "Glutes"], ["adduction", "Hip Adduction", "Adductors"], ["abduction", "Hip Abduction", "Abductors"], ["calf", "Calf Raise", "Calves"], ["decline-crunch", "Decline Weighted Crunch", "Core"], ["leg-raise", "Hanging Leg Raise", "Core", 1], ["cable-crunch", "Cable Crunch", "Core"]
 ].map(([id, name, group, bw, region]) => ({ id, name, group, bw: !!bw, region: region || null }));
 // Retired lifts stay defined so old sessions keep their names, but leave the picker unless already in your history.
-const RETIRED = new Set(["curl", "skull", "deadlift", "front-squat", "hip-thrust"]);
+const RETIRED = new Set(["curl", "skull", "deadlift", "front-squat", "hip-thrust", "ohp"]);
 const BIG4 = [["bench", "Bench"], ["squat", "Squat"], ["deadlift", "Deadlift"], ["ohp", "OHP"]];
 
 /* ---------- Utils ---------- */
