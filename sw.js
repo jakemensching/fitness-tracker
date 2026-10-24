@@ -1,5 +1,5 @@
 // Overload service worker: app shell works offline, updates arrive on the next open.
-const VERSION = "overload-v16";
+const VERSION = "overload-v17";
 const SHELL = ["./", "./index.html", "./manifest.json", "./favicon.svg", "./apple-touch-icon.png", "./icons/icon-192.png", "./icons/icon-512.png"];
 const CDN = ["cdnjs.cloudflare.com", "cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
 

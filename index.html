@@ -268,9 +268,11 @@ body.resting main .col { padding-bottom: calc(170px + env(safe-area-inset-bottom
 .excat-b .exset:last-child { border-bottom: 0; }
 .mheat, .mh-legend { --heat: var(--accent-fill); }
 :root.sun .mheat, :root.sun .mh-legend { --heat: var(--blue); }
-.mheat { width: 100%; max-width: 270px; height: auto; align-self: center; display: block; --mh-off: color-mix(in srgb, var(--muted) 45%, var(--surface)); }
-.mheat .mh-body { fill: var(--raised); stroke: var(--faint); stroke-width: .8; stroke-linejoin: round; }
-.mheat .mh-mus path { stroke: var(--faint); stroke-width: .8; stroke-linejoin: round; }
+.mheat { width: 100%; max-width: 270px; height: auto; align-self: center; display: block; --mh-off: color-mix(in srgb, var(--muted) 45%, var(--surface)); --mh-skin: color-mix(in srgb, var(--muted) 18%, var(--surface)); --mh-line: color-mix(in srgb, var(--fg) 45%, var(--surface)); }
+.mheat .mh-skin { fill: var(--mh-skin); stroke: none; }
+.mheat .mh path { stroke: var(--mh-line); stroke-width: 1; stroke-linejoin: round; }
+.mheat .mh-lines { fill: none; stroke: var(--mh-line); stroke-width: .8; stroke-linecap: round; pointer-events: none; opacity: .8; }
+.mheat .mh-edge { fill: none; stroke: var(--mh-line); stroke-width: 1.2; stroke-linejoin: round; pointer-events: none; }
 .mheat .mh-div { stroke: var(--heat); stroke-width: 3; stroke-linecap: round; opacity: .85; }
 .mheat .mh { cursor: pointer; transition: fill-opacity .2s; }
 .mh-lbl { font-family: var(--display); font-size: 17px; letter-spacing: .02em; fill: var(--heat); font-weight: 800; }
@@ -1005,37 +1007,39 @@ function loggedEx() {
 }
 /* Muscle heat map: darker blue = more hard sets per week in the selected range */
 // One body split down the middle: the left half is the front, the right half is the back.
-// Every shape is drawn in left-half coordinates (x up to 100); back shapes are mirrored onto the right.
+// Shapes are drawn in left-half coordinates (x up to 100); the back is mirrored onto the right.
+// Each muscle fills its whole area (clipped to the body outline), so the body is fully covered
+// and thin lines only show where two muscles meet.
 const BODY = {
-  base: ["M92 44 L100 44 L100 58 L90 58 Z",
-    "M100 56 L78 58 C64 60 56 66 54 76 L58 112 C62 140 66 168 68 194 L100 198 Z",
-    "M56 66 C44 70 40 84 40 100 C40 116 42 130 44 140 L60 140 C62 126 64 110 64 96 L64 72 Z",
+  neck: "M92 44 L100 44 L100 58 L90 58 Z",
+  torso: "M100 56 L78 58 C64 60 56 66 54 76 L58 112 C62 140 66 168 68 194 L100 198 Z",
+  arm: ["M56 66 C44 70 40 84 40 100 C40 116 42 130 44 140 L60 140 C62 126 64 110 64 96 L64 72 Z",
     "M44 140 C40 160 38 180 38 196 L48 198 C52 182 58 160 60 140 Z",
-    "M38 196 C33 204 32 214 35 222 C38 226 42 224 44 219 C46 214 48 206 48 198 Z",
-    "M68 192 C62 226 62 262 68 292 C66 322 66 352 70 384 L90 384 C92 352 94 322 92 292 C96 262 99 228 100 198 Z",
+    "M38 196 C33 204 32 214 35 222 C38 226 42 224 44 219 C46 214 48 206 48 198 Z"],
+  leg: ["M68 192 C62 226 62 262 68 292 C66 322 66 352 70 384 L90 384 C92 352 94 322 92 292 C96 262 99 228 100 198 Z",
     "M70 384 C66 392 63 400 66 405 L92 406 L90 384 Z"],
+  // [group, clip, path]. Later shapes paint over earlier ones.
   front: [
-    ["Shoulders", ["M56 64 C46 66 40 76 40 92 C46 98 54 98 60 92 C64 84 68 74 72 64 C66 61 60 61 56 64 Z"]],
-    ["Upper Chest", ["M74 64 C84 62 93 62 99 63 L99 80 C89 80 79 81 70 82 C68 75 70 69 74 64 Z"]],
-    ["Chest", ["M70 85 C80 84 90 84 99 84 L99 104 C88 110 77 107 71 98 C69 94 69 89 70 85 Z"]],
-    ["Biceps", ["M42 100 C48 104 56 104 61 99 C62 112 60 126 57 138 C51 140 46 137 44 130 C42 122 41 110 42 100 Z"]],
-    ["Core", ["M88 112 L99 112 L99 126 L87 126 Z", "M87 128 L99 128 L99 142 L87 142 Z", "M87 144 L99 144 L99 158 L87 158 Z",
-      "M87 160 L99 160 L99 182 C94 180 90 174 88 168 Z", "M72 112 C78 114 83 114 85 116 L85 166 C80 170 74 176 70 186 C68 160 68 134 72 112 Z"]],
-    ["Abductors", ["M69 190 C64 202 63 218 65 234 C69 224 72 210 76 196 Z"]],
-    ["Quads", ["M76 198 C70 222 69 252 72 280 C76 284 80 284 82 280 C82 254 82 226 82 202 Z",
-      "M82 202 C84 230 84 258 82 282 C86 288 92 286 94 280 C94 262 92 236 90 206 C88 203 85 202 82 202 Z"]],
-    ["Adductors", ["M90 206 C92 236 94 262 94 276 C97 262 99 240 99 204 Z"]],
-    ["Calves", ["M72 300 C69 324 70 348 74 368 C79 371 84 370 86 364 C88 340 88 318 86 300 C81 296 76 296 72 300 Z"]]],
+    ["Upper Chest", "torso", "M40 40 L100 40 L100 82 L40 82 Z"],
+    ["Chest", "torso", "M40 82 L100 82 L100 108 C90 112 78 110 66 104 L40 104 Z"],
+    ["Core", "torso", "M40 104 L66 104 C78 110 90 112 100 108 L100 214 L40 214 Z"],
+    ["Biceps", "arm", "M20 88 L72 88 L72 140 L20 140 Z"],
+    ["Shoulders", "sh", "M80 54 C64 56 50 62 40 74 L34 98 L62 98 C66 86 70 72 76 62 Z"],
+    ["Quads", "leg", "M50 186 L100 186 L100 290 L50 290 Z"],
+    ["Adductors", "leg", "M90 200 L100 196 L100 286 L95 286 C96 260 95 230 90 200 Z"],
+    ["Abductors", "leg", "M50 186 L80 194 L68 246 L50 246 Z"],
+    ["Calves", "leg", "M50 300 L100 300 L100 372 L50 372 Z"]],
+  frontLines: ["M86 112 L86 174", "M86 126 L100 126", "M86 142 L100 142", "M86 158 L100 158",
+    "M86 112 C78 116 72 122 68 132", "M70 186 C80 188 92 194 100 200", "M80 206 C83 236 83 262 80 288"],
   back: [
-    ["Back", ["M80 52 C88 50 96 50 99 50 L99 118 C92 104 82 86 72 66 C74 60 77 55 80 52 Z",
-      "M62 94 C68 80 72 72 76 72 C84 88 92 104 99 122 L99 150 C92 162 86 170 80 174 C72 150 64 120 62 94 Z"]],
-    ["Shoulders", ["M56 64 C46 66 40 76 40 92 C46 98 54 98 60 92 C64 84 68 74 72 64 C66 61 60 61 56 64 Z"]],
-    ["Triceps", ["M42 100 C48 104 56 104 61 99 C62 112 60 126 57 138 C51 140 46 137 44 130 C42 122 41 110 42 100 Z"]],
-    ["Abductors", ["M70 184 C78 178 90 178 99 182 L99 214 C88 218 76 214 70 206 C68 198 68 190 70 184 Z"]],
-    ["Hamstrings", ["M74 216 C70 240 72 262 76 284 C80 288 84 288 86 284 C86 260 86 238 86 218 Z",
-      "M86 218 C87 240 88 262 88 284 C92 288 95 284 96 278 C98 258 98 238 99 216 C94 219 90 219 86 218 Z"]],
-    ["Calves", ["M72 298 C67 316 68 334 74 350 C78 354 82 352 83 346 C84 330 84 314 83 298 C79 295 75 295 72 298 Z",
-      "M83 298 C84 314 85 330 85 346 C88 352 92 350 92 340 C94 326 93 310 91 298 C88 295 85 295 83 298 Z"]]]
+    ["Back", "torso", "M40 40 L100 40 L100 214 L40 214 Z"],
+    ["Triceps", "arm", "M20 88 L72 88 L72 140 L20 140 Z"],
+    ["Shoulders", "sh", "M80 54 C64 56 50 62 40 74 L34 98 L62 98 C66 86 70 72 76 62 Z"],
+    ["Abductors", "leg", "M50 180 L100 180 L100 222 C88 226 74 222 50 212 Z"],
+    ["Hamstrings", "leg", "M50 212 C74 222 88 226 100 222 L100 290 L50 290 Z"],
+    ["Calves", "leg", "M50 296 L100 296 L100 352 C94 362 86 366 80 358 C72 366 62 360 50 350 Z"]],
+  backLines: ["M74 64 C84 86 92 104 100 122", "M62 100 C66 130 74 156 84 178", "M90 124 L90 194",
+    "M85 226 C87 250 87 270 86 288", "M84 300 C84 320 84 336 82 356"]
 };
 function muscleHeat() {
   const idx = index(), t = dn(today()), lo = rangeStart(ui.range);
@@ -1050,11 +1054,17 @@ function muscleHeat() {
 function heatCard() {
   const H = muscleHeat();
   const mirror = 'transform="matrix(-1 0 0 1 200 0)"';
-  const fillFor = g => { const v = H.per[g] || 0; return v ? `fill="var(--heat)" fill-opacity="${(0.25 + 0.75 * v / H.max).toFixed(2)}"` : `fill="var(--mh-off)"`; };
-  const muscles = list => list.map(([g, ds]) => `<g class="mh" data-act="mh" data-g="${g}" ${fillFor(g)}><title>${g}: ${H.per[g] || 0} sets/week</title>${ds.map(d => `<path d="${d}"/>`).join("")}</g>`).join("");
+  // Solid colors (not see-through), so a muscle drawn over another one hides it cleanly.
+  const fillFor = g => { const v = H.per[g] || 0; return v ? `style="fill: color-mix(in srgb, var(--heat) ${Math.round(30 + 70 * v / H.max)}%, var(--mh-off))"` : `style="fill: var(--mh-off)"`; };
+  const shapes = [BODY.neck, BODY.torso].concat(BODY.arm, BODY.leg);
+  const half = (list, lines) => list.map(([g, clip, d]) => `<g clip-path="url(#mh-${clip})"><g class="mh" data-act="mh" data-g="${g}" ${fillFor(g)}><title>${g}: ${H.per[g] || 0} sets/week</title><path d="${d}"/></g></g>`).join("")
+    + `<g class="mh-lines">${lines.map(d => `<path d="${d}"/>`).join("")}</g>`;
   const svg = `<svg class="mheat" viewBox="0 0 200 414" role="img" aria-label="Body heat map, front on the left half and back on the right half">
-      <g class="mh-body"><circle cx="100" cy="28" r="18"/>${BODY.base.map(d => `<path d="${d}"/><path d="${d}" ${mirror}/>`).join("")}</g>
-      <g class="mh-mus">${muscles(BODY.front)}<g ${mirror}>${muscles(BODY.back)}</g></g>
+      <defs><clipPath id="mh-torso"><path d="${BODY.torso}"/></clipPath><clipPath id="mh-arm">${BODY.arm.map(d => `<path d="${d}"/>`).join("")}</clipPath>
+        <clipPath id="mh-leg">${BODY.leg.map(d => `<path d="${d}"/>`).join("")}</clipPath><clipPath id="mh-sh"><path d="${BODY.torso}"/><path d="${BODY.arm[0]}"/></clipPath></defs>
+      <g class="mh-skin"><circle cx="100" cy="28" r="18"/>${shapes.map(d => `<path d="${d}"/><path d="${d}" ${mirror}/>`).join("")}</g>
+      ${half(BODY.front, BODY.frontLines)}<g ${mirror}>${half(BODY.back, BODY.backLines)}</g>
+      <g class="mh-edge"><circle cx="100" cy="28" r="18"/>${shapes.map(d => `<path d="${d}"/><path d="${d}" ${mirror}/>`).join("")}</g>
       <line x1="100" y1="6" x2="100" y2="408" class="mh-div"/>
       <text x="46" y="40" text-anchor="middle" class="mh-lbl">Front</text><text x="154" y="40" text-anchor="middle" class="mh-lbl">Back</text></svg>`;
   const ranked = GROUPS.slice().sort((a, b) => H.per[b] - H.per[a]);
