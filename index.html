@@ -72,7 +72,7 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
 }
 /* Daylight palette: applied between first light (civil dawn) and last light (civil dusk). */
 :root.sun {
-  --bg: #EDF0F4;
+  --bg: #FFFFFF;
   --surface: #FFFFFF;
   --raised: #F4F6F9;
   --line: #D4DAE2;
@@ -376,7 +376,7 @@ header.top .spacer { flex-shrink: 1; min-width: 0; }
     var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (fade && !reduce) { root.classList.add("fading"); clearTimeout(fadeT); fadeT = setTimeout(function () { root.classList.remove("fading"); }, 2500); }
     root.classList.toggle("sun", light);
-    var tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.setAttribute("content", light ? "#EDF0F4" : "#0E1115");
+    var tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.setAttribute("content", light ? "#FFFFFF" : "#0E1115");
     clearTimeout(apply.t); apply.t = setTimeout(function () { window.dispatchEvent(new Event("overload:theme")); }, fade && !reduce ? 2450 : 0);
   }
   function tick(fade) {
