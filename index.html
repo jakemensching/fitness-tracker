@@ -1209,8 +1209,9 @@ function stepPeriod() {
   const val = n => { const e = S.steps[ds(n)]; return e ? e.steps : null; };
   let title, labels = [], vals = [], from, to, avgDays = [];
   if (view === "week") {
-    from = weekStart(t) - 7 * off; to = from + 6;
-    for (let n = from; n <= to; n++) { labels.push(WDAYS[n - from]); vals.push(n > t ? null : val(n)); }
+    // Rolling 7 days ending today, so a fresh Sunday never shows an empty chart.
+    to = t - 7 * off; from = to - 6;
+    for (let n = from; n <= to; n++) { labels.push(WDAYS[new Date(n * 864e5).getUTCDay()]); vals.push(val(n)); }
     title = fmtDn(from) + " to " + fmtDn(to);
   } else if (view === "month") {
     const y = new Date(now.getFullYear(), now.getMonth() - off, 1);
