@@ -278,6 +278,11 @@ header.top .spacer { flex-shrink: 1; min-width: 0; }
 .suppdots i { height: 8px; border-radius: 4px; background: var(--raised); border: 1px solid var(--line); }
 .suppdots i.on { background: var(--good); border-color: var(--good); }
 .suppdots i.today { outline: 2px solid var(--muted); outline-offset: 1px; }
+.suppdots .sdot { display: flex; flex-direction: column; align-items: center; gap: 5px; background: none; border: 0; padding: 8px 0 2px; margin: 0; color: inherit; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.suppdots .sdot i { width: 100%; }
+.suppdots .sdot span { font-size: 11px; line-height: 1; color: var(--muted); }
+.suppdots .sdot.today span { color: inherit; font-weight: 700; }
+.suppdots .sdot:active i { transform: scale(.94); }
 .stepline { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; width: 100%; cursor: pointer; }
 .stepline > div { display: flex; flex-direction: column; gap: 4px; }
 .stepline .right { align-items: flex-end; line-height: 1.5; }
@@ -831,7 +836,10 @@ function suppCard() {
   const L = suppList(), t = dn(today());
   const rows = L.map(sp => {
     const on = suppTaken(today(), sp.id), st = suppStreak(sp.id);
-    const dots = Array.from({ length: 7 }, (_, i) => t - 6 + i).map(n => `<i class="${suppTaken(ds(n), sp.id) ? "on" : ""} ${n === t ? "today" : ""}" title="${fmtDn(n)}"></i>`).join("");
+    const dots = Array.from({ length: 7 }, (_, i) => t - 6 + i).map(n => {
+      const d = ds(n), got = suppTaken(d, sp.id), wd = "SMTWTFS"[new Date(d + "T00:00:00Z").getUTCDay()];
+      return `<button type="button" class="sdot ${n === t ? "today" : ""}" data-act="supp-day" data-id="${esc(sp.id)}" data-d="${d}" aria-pressed="${got}" aria-label="${esc(sp.name)} ${fmtDn(n)}: ${got ? "taken" : "not taken"}. Tap to change."><i class="${got ? "on" : ""} ${n === t ? "today" : ""}"></i><span>${wd}</span></button>`;
+    }).join("");
     return `<div class="supp"><button class="suppchk" data-act="supp-tog" data-id="${esc(sp.id)}" aria-pressed="${on}"><span class="box">${on ? "✓" : ""}</span><span class="grow"><b>${esc(sp.name)}</b><span class="small muted">${on ? "Taken today" : "Not yet today"}${st ? " · " + st + " day streak" : ""}</span></span></button>
       <div class="suppdots" aria-label="Last 7 days">${dots}</div>
       ${ui.suppEdit ? `<button class="btn sm danger" data-act="supp-del" data-id="${esc(sp.id)}">Remove</button>` : ""}</div>`;
@@ -1791,11 +1799,16 @@ document.addEventListener("click", ev => {
     case "open-health": openSettings(); setTimeout(() => { const c = $("#health-card"); if (c) c.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60); return;
     case "health-key": makeHealthKey(b); return;
     case "mh": { const H = muscleHeat(), g = b.dataset.g; toast(`${g}: ${H.per[g] || 0} sets per week`); return; }
-    case "supp-tog": {
+    case "supp-tog": case "supp-day": {
       if (DEMO) { toast("Sample mode: nothing is saved."); return; }
-      const d = today(), e = Object.assign({ date: d }, (S.supps || {})[d]); e.taken = Object.assign({}, e.taken);
-      if (e.taken[b.dataset.id]) delete e.taken[b.dataset.id]; else e.taken[b.dataset.id] = true;
-      S.supps = S.supps || {}; S.supps[d] = e; writeOp("p:" + d, "set", e); touch(); render(); return;
+      const past = a === "supp-day", d = past ? b.dataset.d : today();
+      if (past && !/^\d{4}-\d{2}-\d{2}$/.test(d || "")) return;
+      const e = Object.assign({ date: d }, (S.supps || {})[d]); e.taken = Object.assign({}, e.taken);
+      const nowOn = !e.taken[b.dataset.id];
+      if (nowOn) e.taken[b.dataset.id] = true; else delete e.taken[b.dataset.id];
+      S.supps = S.supps || {}; S.supps[d] = e; writeOp("p:" + d, "set", e); touch(); render();
+      if (past) { const sp = suppList().find(x => x.id === b.dataset.id); toast(`${sp ? sp.name : "Supplement"} ${nowOn ? "logged" : "cleared"} for ${fmtDn(dn(d))}.`); }
+      return;
     }
     case "supp-edit": ui.suppEdit = !ui.suppEdit; render(); if (ui.suppEdit) { const i = $("#supp-name"); if (i) i.focus(); } return;
     case "supp-del": {
